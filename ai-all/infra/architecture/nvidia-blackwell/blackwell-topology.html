@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Blackwell B200 hardware hierarchy, mapped to CUDA C++ and PTX</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light;
+  --font-ui:"Barlow","PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;
+  --font-cond:"Barlow Semi Condensed","Barlow","PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono","SFMono-Regular",Menlo,Consolas,"DejaVu Sans Mono","Noto Sans Mono CJK SC",monospace;
+  --bg:#EDF1F5;--paper:#F6F8FA;--gridc:#E1E7EE;--rule:#CBD5DF;
+  --panel:#FFFFFF;--panel-s:#C3CEDA;
+  --ink:#132130;--ink2:#4A5B6D;--ink3:#8A99A9;
+  --card:#FFFFFF;--card-s:#CBD5DF;--pill-f:#EDF1F5;--pill-t:#4A5B6D;
+  --pkg-f:#F3F6F9;--pkg-s:#5E6E80;--die-f:#FAFBFC;--die-s:#7D8CA0;
+  --gpc-f:#EEF2F6;--gpc-s:#93A2B3;--tpc-s:#AAB6C3;
+  --sm-f:#FFFFFF;--sm-s:#7E8EA0;--smsp-f:#F7F9FB;--smsp-s:#A3B0BE;
+  --fp32-f:#C8F0D5;--fp32-s:#1E9452;--fp32-t:#0B3B21;
+  --fp64-f:#E3EEC4;--fp64-s:#6A8A1F;--fp64-t:#2D3B0B;
+  --sfu-f:#C9EEF0;--sfu-s:#0D7C86;--sfu-t:#053A40;
+  --tc-f:#E0263F;--tc-s:#A3132A;--tc-t:#FFFFFF;
+  --mov-f:#DCE5EF;--mov-s:#44617F;--mov-t:#1B2E44;
+  --reg-f:#DAE8FF;--reg-s:#2F6BD6;--reg-t:#0E2A5C;
+  --smem-f:#BCD2FB;--smem-s:#1C4BCF;--smem-t:#0B1E5A;
+  --tmem-f:#E3D7FB;--tmem-s:#6A39D4;--tmem-t:#2A1260;
+  --l2-f:#C5E5F5;--l2-s:#0577AB;--l2-t:#03344C;
+  --hbm-f:#D2D4F8;--hbm-s:#3A3DB3;--hbm-t:#191A56;
+  --ic-f:#E4E9EF;--ic-s:#6B7C8F;--ic-t:#26323F;
+  --ctrl-f:#ECE9E4;--ctrl-s:#6F695F;--ctrl-t:#2B2722;
+  --io-f:#DDE2E8;--io-s:#2F3B48;--io-t:#17212B;
+  --cluster:#C026D3;
+  --cta-f:#FFE7D3;--cta-s:#E2580B;--cta-t:#5A2104;
+  --warp-f:#FACC15;--warp-s:#A16207;--warp-t:#3A2A02;
+  --thread-f:#FEF6C3;--thread-s:#C99206;--thread-t:#4A3503;
+  --hatch:rgba(20,40,90,.17);--off:#B8C2CC;
+  --link:#263544;--ctl:#7C8B9B;--leader:#6D7D8E;--zoom:#4B6075;
+  --code:#1B2733;--c-kw:#7C3AED;--c-fn:#0B6E99;--c-op:#B42318;--c-reg:#1F7A4D;--c-dir:#A15C07;--c-cm:#8494A5;--c-num:#9A3412;
+  --swtag-f:#F2F5F8;--swtag-s:#C3CEDA;--swtag-t:#4A5B6D;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0D131A;--paper:#111921;--gridc:#18222D;--rule:#2A3846;
+    --panel:#151F29;--panel-s:#2C3B4A;
+    --ink:#E5ECF3;--ink2:#A5B3C1;--ink3:#6E7F90;
+    --card:#151F29;--card-s:#2C3B4A;--pill-f:#1E2A36;--pill-t:#A5B3C1;
+    --pkg-f:#131C25;--pkg-s:#8697A9;--die-f:#17212C;--die-s:#6D7E90;
+    --gpc-f:#1B2633;--gpc-s:#4E5F71;--tpc-s:#3F4F60;
+    --sm-f:#1F2B38;--sm-s:#5D6F82;--smsp-f:#19232E;--smsp-s:#3E4E5F;
+    --fp32-f:#123F28;--fp32-s:#3CC97E;--fp32-t:#D2F6E1;
+    --fp64-f:#33401A;--fp64-s:#A6C653;--fp64-t:#EEF6D8;
+    --sfu-f:#0E3C41;--sfu-s:#3EC4CF;--sfu-t:#D4F5F7;
+    --tc-f:#D61F3A;--tc-s:#FF8C9C;--tc-t:#FFFFFF;
+    --mov-f:#1F3145;--mov-s:#86A9CC;--mov-t:#DCE8F4;
+    --reg-f:#13294B;--reg-s:#6EA1F4;--reg-t:#DCE8FF;
+    --smem-f:#172F6B;--smem-s:#7DA6FF;--smem-t:#E1EAFF;
+    --tmem-f:#2D1B58;--tmem-s:#AA8CF6;--tmem-t:#EEE7FF;
+    --l2-f:#0B3347;--l2-s:#49B6E8;--l2-t:#D8F1FC;
+    --hbm-f:#22245A;--hbm-s:#9094F1;--hbm-t:#E3E4FD;
+    --ic-f:#212C38;--ic-s:#8191A4;--ic-t:#DCE3EA;
+    --ctrl-f:#2A2825;--ctrl-s:#A7A196;--ctrl-t:#EEEAE4;
+    --io-f:#222B35;--io-s:#A3B1BF;--io-t:#E5ECF3;
+    --cluster:#E879F9;
+    --cta-f:#4A2410;--cta-s:#FB8C4E;--cta-t:#FFE6D5;
+    --warp-f:#F6C915;--warp-s:#FDE68A;--warp-t:#2A1D00;
+    --thread-f:#4E3F0E;--thread-s:#E2B33F;--thread-t:#FEF3C7;
+    --hatch:rgba(255,255,255,.10);--off:#3A4757;
+    --link:#C7D3DF;--ctl:#7D8E9F;--leader:#7D8E9F;--zoom:#8EA2B6;
+    --code:#DCE4EC;--c-kw:#C4B5FD;--c-fn:#7DD3FC;--c-op:#FDA29B;--c-reg:#86EFAC;--c-dir:#FCD34D;--c-cm:#7D8EA1;--c-num:#FDBA74;
+    --swtag-f:#1B2633;--swtag-s:#2C3B4A;--swtag-t:#A5B3C1;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0D131A;--paper:#111921;--gridc:#18222D;--rule:#2A3846;
+  --panel:#151F29;--panel-s:#2C3B4A;
+  --ink:#E5ECF3;--ink2:#A5B3C1;--ink3:#6E7F90;
+  --card:#151F29;--card-s:#2C3B4A;--pill-f:#1E2A36;--pill-t:#A5B3C1;
+  --pkg-f:#131C25;--pkg-s:#8697A9;--die-f:#17212C;--die-s:#6D7E90;
+  --gpc-f:#1B2633;--gpc-s:#4E5F71;--tpc-s:#3F4F60;
+  --sm-f:#1F2B38;--sm-s:#5D6F82;--smsp-f:#19232E;--smsp-s:#3E4E5F;
+  --fp32-f:#123F28;--fp32-s:#3CC97E;--fp32-t:#D2F6E1;
+  --fp64-f:#33401A;--fp64-s:#A6C653;--fp64-t:#EEF6D8;
+  --sfu-f:#0E3C41;--sfu-s:#3EC4CF;--sfu-t:#D4F5F7;
+  --tc-f:#D61F3A;--tc-s:#FF8C9C;--tc-t:#FFFFFF;
+  --mov-f:#1F3145;--mov-s:#86A9CC;--mov-t:#DCE8F4;
+  --reg-f:#13294B;--reg-s:#6EA1F4;--reg-t:#DCE8FF;
+  --smem-f:#172F6B;--smem-s:#7DA6FF;--smem-t:#E1EAFF;
+  --tmem-f:#2D1B58;--tmem-s:#AA8CF6;--tmem-t:#EEE7FF;
+  --l2-f:#0B3347;--l2-s:#49B6E8;--l2-t:#D8F1FC;
+  --hbm-f:#22245A;--hbm-s:#9094F1;--hbm-t:#E3E4FD;
+  --ic-f:#212C38;--ic-s:#8191A4;--ic-t:#DCE3EA;
+  --ctrl-f:#2A2825;--ctrl-s:#A7A196;--ctrl-t:#EEEAE4;
+  --io-f:#222B35;--io-s:#A3B1BF;--io-t:#E5ECF3;
+  --cluster:#E879F9;
+  --cta-f:#4A2410;--cta-s:#FB8C4E;--cta-t:#FFE6D5;
+  --warp-f:#F6C915;--warp-s:#FDE68A;--warp-t:#2A1D00;
+  --thread-f:#4E3F0E;--thread-s:#E2B33F;--thread-t:#FEF3C7;
+  --hatch:rgba(255,255,255,.10);--off:#3A4757;
+  --link:#C7D3DF;--ctl:#7D8E9F;--leader:#7D8E9F;--zoom:#8EA2B6;
+  --code:#DCE4EC;--c-kw:#C4B5FD;--c-fn:#7DD3FC;--c-op:#FDA29B;--c-reg:#86EFAC;--c-dir:#FCD34D;--c-cm:#7D8EA1;--c-num:#FDBA74;
+  --swtag-f:#1B2633;--swtag-s:#2C3B4A;--swtag-t:#A5B3C1;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-ui);font-size:15px;line-height:1.55;-webkit-text-size-adjust:100%}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:1440px;margin:0 auto;padding:0 24px}
+header.top{padding-top:28px}
+h1{font-family:var(--font-cond);font-weight:700;font-size:clamp(26px,3.3vw,40px);line-height:1.1;letter-spacing:-.01em;margin:0 0 10px}
+.lede{max-width:78ch;color:var(--ink2);margin:0}
+.legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));column-gap:26px;row-gap:6px;margin-top:20px;padding:16px 0 18px;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+.lg h2{font-family:var(--font-cond);font-size:15px;font-weight:600;margin:0 0 6px;color:var(--ink)}
+.keys{list-style:none;margin:0;padding:0;font-size:13.5px;color:var(--ink2)}
+.keys li{display:flex;align-items:center;gap:8px;padding:2px 0;line-height:1.35}
+.sw{flex:none;width:24px;height:14px;border-radius:3px;border:1.5px solid var(--s);background:var(--f)}
+.sw.mem{background-image:repeating-linear-gradient(0deg,var(--hatch) 0 1px,transparent 1px 4px)}
+.sw.dash{background:none;border-style:dashed}
+.sw-fp32{--f:var(--fp32-f);--s:var(--fp32-s)}.sw-fp64{--f:var(--fp64-f);--s:var(--fp64-s)}
+.sw-sfu{--f:var(--sfu-f);--s:var(--sfu-s)}.sw-tc{--f:var(--tc-f);--s:var(--tc-s)}
+.sw-mov{--f:var(--mov-f);--s:var(--mov-s)}.sw-reg{--f:var(--reg-f);--s:var(--reg-s)}
+.sw-smem{--f:var(--smem-f);--s:var(--smem-s)}.sw-tmem{--f:var(--tmem-f);--s:var(--tmem-s)}
+.sw-l2{--f:var(--l2-f);--s:var(--l2-s)}.sw-hbm{--f:var(--hbm-f);--s:var(--hbm-s)}
+.sw-ic{--f:var(--ic-f);--s:var(--ic-s)}.sw-ctrl{--f:var(--ctrl-f);--s:var(--ctrl-s)}
+.sw-io{--f:var(--io-f);--s:var(--io-s)}.sw-ghost{--s:var(--ink3)}
+.sw-cluster{--s:var(--cluster)}.sw-cta{--f:var(--cta-f);--s:var(--cta-s)}
+.sw-warp{--f:var(--warp-f);--s:var(--warp-s)}.sw-thread{--f:var(--thread-f);--s:var(--thread-s)}
+.wl svg{flex:none;width:58px;height:16px}
+.wl line{stroke:var(--link)}
+.wl .ctl{stroke:var(--ctl);stroke-dasharray:2 3}
+.wl .ldr{stroke:var(--leader);stroke-dasharray:3 3}
+.map{font-size:13.5px;color:var(--ink2);margin:0;padding:0;list-style:none}
+.map li{padding:2px 0;line-height:1.35}
+.map b{color:var(--ink);font-weight:600}
+.toolbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--rule)}
+.tb{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:8px 0}
+.tb button{font:inherit;font-size:13.5px;color:var(--ink);background:var(--panel);border:1px solid var(--panel-s);border-radius:6px;padding:4px 11px;cursor:pointer;min-height:30px}
+.tb button:hover{border-color:var(--ink3)}
+.tb button:focus-visible,.tb input:focus-visible{outline:2px solid var(--reg-s);outline-offset:2px}
+.zv{min-width:48px;text-align:center;font-variant-numeric:tabular-nums;font-size:13.5px;color:var(--ink2)}
+.tgl{display:flex;align-items:center;gap:6px;font-size:13.5px;margin-left:8px;cursor:pointer}
+.hint{font-size:12.5px;color:var(--ink3);margin-left:auto}
+.vp{overflow-x:auto;overflow-y:hidden;padding:14px 0 28px;cursor:grab;-webkit-overflow-scrolling:touch}
+.vp.dragging{cursor:grabbing;user-select:none}
+#board{display:block;margin:0 auto;font-family:var(--font-cond)}
+footer.notes{padding:18px 0 40px;border-top:1px solid var(--rule);font-size:13px;color:var(--ink2)}
+footer.notes p{max-width:110ch;margin:6px 0}
+footer.notes a{color:var(--reg-s)}
+@media (max-width:720px){.hint{margin-left:0;width:100%}}
+@media (min-width:1200px){.legend{grid-template-columns:1fr 1.05fr 1.3fr 1fr 1.75fr 1.35fr}}
+
+/* ---------- SVG ---------- */
+svg text{fill:var(--ink)}
+.bg-paper{fill:var(--paper)}
+.grid-line{fill:none;stroke:var(--gridc);stroke-width:1}
+.hatch-line{stroke:var(--hatch);stroke-width:1.2}
+.off-line{stroke:var(--off);stroke-width:1.5}
+.arrow-ctl{fill:var(--ctl)}.arrow-lnk{fill:var(--link)}
+.panel-frame{fill:var(--panel);stroke:var(--panel-s);stroke-width:1}
+.pbadge{fill:var(--ink)}.pbadge-t{fill:var(--panel)}
+.swtag rect{fill:var(--swtag-f);stroke:var(--swtag-s)}.swtag text{fill:var(--swtag-t)}
+.cap{fill:var(--ink)}.cap2{fill:var(--ink3)}.capm{fill:var(--ink2)}
+.cont-pkg{fill:var(--pkg-f);stroke:var(--pkg-s);stroke-width:1.6}
+.cont-die{fill:var(--die-f);stroke:var(--die-s);stroke-width:1.3}
+.cont-gpc{fill:var(--gpc-f);stroke:var(--gpc-s);stroke-width:1.1}
+.cont-tpc{fill:none;stroke:var(--tpc-s);stroke-width:1;stroke-dasharray:4 3}
+.cont-sm{fill:var(--sm-f);stroke:var(--sm-s);stroke-width:1.3}
+.cont-smsp{fill:var(--smsp-f);stroke:var(--smsp-s);stroke-width:1.1}
+.cont-pool{fill:none;stroke:var(--warp-s);stroke-width:1;stroke-dasharray:5 3}
+.blk .b{stroke-width:1.2}
+.k-fp32 .b{fill:var(--fp32-f);stroke:var(--fp32-s)}.k-fp32 text{fill:var(--fp32-t)}
+.k-fp64 .b{fill:var(--fp64-f);stroke:var(--fp64-s)}.k-fp64 text{fill:var(--fp64-t)}
+.k-sfu .b{fill:var(--sfu-f);stroke:var(--sfu-s)}.k-sfu text{fill:var(--sfu-t)}
+.k-tc .b{fill:var(--tc-f);stroke:var(--tc-s);stroke-width:2}.k-tc text{fill:var(--tc-t)}
+.k-mov .b{fill:var(--mov-f);stroke:var(--mov-s)}.k-mov text{fill:var(--mov-t)}
+.k-reg .b{fill:var(--reg-f);stroke:var(--reg-s)}.k-reg text{fill:var(--reg-t)}
+.k-smem .b{fill:var(--smem-f);stroke:var(--smem-s)}.k-smem text{fill:var(--smem-t)}
+.k-tmem .b{fill:var(--tmem-f);stroke:var(--tmem-s)}.k-tmem text{fill:var(--tmem-t)}
+.k-l2 .b{fill:var(--l2-f);stroke:var(--l2-s)}.k-l2 text{fill:var(--l2-t)}
+.k-hbm .b{fill:var(--hbm-f);stroke:var(--hbm-s)}.k-hbm text{fill:var(--hbm-t)}
+.k-ic .b{fill:var(--ic-f);stroke:var(--ic-s)}.k-ic text{fill:var(--ic-t)}
+.k-ctrl .b{fill:var(--ctrl-f);stroke:var(--ctrl-s)}.k-ctrl text{fill:var(--ctrl-t)}
+.k-io .b{fill:var(--io-f);stroke:var(--io-s);stroke-width:1.5}.k-io text{fill:var(--io-t)}
+.k-ghost .b{fill:var(--panel);stroke:var(--ink3);stroke-dasharray:4 3}.k-ghost text{fill:var(--ink2)}
+.k-sm .b{fill:var(--sm-f);stroke:var(--sm-s)}.k-sm text{fill:var(--ink)}
+.k-cta .b{fill:var(--cta-f);stroke:var(--cta-s)}.k-cta text{fill:var(--cta-t)}
+.k-warp .b{fill:var(--warp-f);stroke:var(--warp-s)}.k-warp text{fill:var(--warp-t)}
+.k-thread .b{fill:var(--thread-f);stroke:var(--thread-s)}.k-thread text{fill:var(--thread-t)}
+.hatch{fill:url(#hatch);pointer-events:none}
+.sm-mini{fill:var(--sm-f);stroke:var(--sm-s);stroke-width:.8}
+.sm-mini-tc{fill:var(--tc-f)}
+.sm-off{fill:url(#offhatch);stroke:var(--off);stroke-width:.8}
+.g-tc{fill:var(--tc-f)}.g-cuda{fill:var(--fp32-s)}.g-tmem{fill:var(--tmem-s)}.g-smem{fill:var(--smem-s)}
+.warp-tick{fill:var(--warp-f);stroke:var(--warp-s);stroke-width:.5}
+.slot-empty{fill:none;stroke:var(--ink3);stroke-width:.8;stroke-dasharray:2 2}
+.cl-box{fill:none;stroke:var(--cluster);stroke-width:1.6;stroke-dasharray:5 3}
+.bracket{fill:none;stroke:var(--ink3);stroke-width:1}
+.tseg{fill:none;stroke:var(--cta-s);stroke-width:1.1}.tseg1{stroke-dasharray:4 2}
+.seg-cta .b{stroke:var(--cta-s);stroke-width:1.6}
+.rf-band{fill:var(--warp-f);fill-opacity:.2;stroke:var(--warp-s);stroke-width:.9}
+.rf-grid{stroke:var(--reg-s);stroke-opacity:.28;stroke-width:.7}
+.reg-cell{fill:var(--reg-f);stroke:var(--reg-s);stroke-width:.8}
+.alu-cell{fill:var(--fp32-f);stroke:var(--fp32-s);stroke-width:.8}
+.cuda-cell{fill:var(--fp32-s);fill-opacity:.55}
+.mask-on{fill:var(--fp32-f);stroke:var(--fp32-s);stroke-width:.7}
+.mask-off{fill:url(#offhatch);stroke:var(--off);stroke-width:.7}
+.t-tmem{fill:var(--tmem-t)}.t-smem{fill:var(--smem-t)}.t-reg{fill:var(--reg-t)}.t-mono{font-family:var(--font-mono)}
+.lnk{fill:none;stroke:var(--link);stroke-opacity:.82;stroke-linecap:butt;stroke-linejoin:round}
+.lnk-lbl{fill:var(--ink2);paint-order:stroke;stroke:var(--panel);stroke-width:3px;stroke-linejoin:round}
+.ctl{fill:none;stroke:var(--ctl);stroke-width:1.2;stroke-dasharray:2 3}
+.shfl{fill:none;stroke:var(--link);stroke-opacity:.5}
+.zoom-fill{fill:var(--zoom);fill-opacity:.08}
+.zoom-edge{fill:none;stroke:var(--zoom);stroke-width:1.2;stroke-dasharray:5 4}
+.zoom-src{fill:none;stroke:var(--zoom);stroke-width:2.2;stroke-dasharray:6 3}
+.zoom-t{fill:var(--zoom)}
+.leader{fill:none;stroke:var(--leader);stroke-width:1;stroke-dasharray:3 3;opacity:.6}
+.leader.hl{stroke:var(--c);opacity:1;stroke-width:2;stroke-dasharray:none}
+.tbadge circle{fill:var(--c);stroke:var(--panel);stroke-width:1.5}
+.tbadge text{fill:#fff}
+.tbadge.cat-warp text,.card.cat-warp .card-badge-t{fill:var(--warp-t)}
+.tbadge{cursor:pointer}
+.tbadge.hl circle{stroke:var(--ink);stroke-width:2}
+.card{cursor:default}
+.card text{font-family:var(--font-ui)}
+.card .code{font-family:var(--font-mono);white-space:pre;fill:var(--code)}
+.card-b{fill:var(--card);stroke:var(--card-s);stroke-width:1}
+.card.hl .card-b{stroke:var(--c);stroke-width:2}
+.card-accent{fill:var(--c)}
+.card-badge{fill:var(--c)}
+.card-badge-t{fill:#fff}
+.card-title{fill:var(--ink)}
+.card-sub,.card-note{fill:var(--ink2)}
+.pill rect{fill:var(--pill-f)}.pill text{fill:var(--pill-t)}
+.c-kw{fill:var(--c-kw)}.c-fn{fill:var(--c-fn)}.c-op{fill:var(--c-op)}.c-reg{fill:var(--c-reg)}.c-dir{fill:var(--c-dir)}.c-cm{fill:var(--c-cm)}.c-num{fill:var(--c-num)}
+.hlbox{fill:none;stroke:var(--c);stroke-width:2.6}
+.hide-notes .cards,.hide-notes .leaders,.hide-notes .badges{display:none}
+
+.codebg{fill:var(--pill-f)}
+.codegut{fill:var(--card-s)}
+.codegut-t{fill:var(--ink2)}
+.rf-lbl{paint-order:stroke;stroke:var(--reg-f);stroke-width:3px;stroke-linejoin:round}
+.tm-lbl{paint-order:stroke;stroke:var(--tmem-f);stroke-width:3px;stroke-linejoin:round}
+.off-bg{fill:var(--sm-f)}
+.c64{fill:var(--fp64-s);fill-opacity:.55}.csfu{fill:var(--sfu-s);fill-opacity:.6}
+:root{--badge-t:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--badge-t:#0D131A}}
+:root[data-theme="dark"]{--badge-t:#0D131A}
+.card-badge-t,.tbadge text{fill:var(--badge-t)}
+.cat-tc .card-badge-t,.tbadge.cat-tc text{fill:#fff}
+.cat-warp .card-badge-t,.tbadge.cat-warp text{fill:var(--warp-t)}
+.card:focus{outline:none}.card:focus-visible .card-b{stroke:var(--c);stroke-width:2.5}
+</style>
+</head>
+<body>
+<header class="top wrap">
+  <h1>Blackwell B200 hardware hierarchy, mapped to CUDA C++ and PTX</h1>
+  <p class="lede">Each panel zooms into the outlined block of the one above: package, die, GPC, SM and SMSP, down to the 32 threads of a single warp. Color marks the kind of hardware: solid blocks compute, striped blocks store, and thinner links carry more bandwidth. The cards on either side pair the most common CUDA C++ at each level with its PTX equivalent; their numbers match the round markers in the diagram.</p>
+  <div class="legend">
+    <section class="lg"><h2>Compute units (solid)</h2>
+      <ul class="keys">
+        <li><span class="sw sw-fp32"></span>CUDA core (FP32 / INT32)</li>
+        <li><span class="sw sw-fp64"></span>FP64 unit</li>
+        <li><span class="sw sw-sfu"></span>SFU (ex2, sin, rsqrt, …)</li>
+        <li><span class="sw sw-tc"></span>Tensor Core (5th gen)</li>
+      </ul></section>
+    <section class="lg"><h2>Memory (striped)</h2>
+      <ul class="keys">
+        <li><span class="sw mem sw-reg"></span>Register file</li>
+        <li><span class="sw mem sw-smem"></span>L1 data cache / shared memory</li>
+        <li><span class="sw mem sw-tmem"></span>Tensor Memory (TMEM)</li>
+        <li><span class="sw mem sw-l2"></span>L2 cache</li>
+        <li><span class="sw mem sw-hbm"></span>HBM3e DRAM</li>
+        <li><span class="sw mem sw-ic"></span>Instruction caches</li>
+      </ul></section>
+    <section class="lg"><h2>Data movement, control and I/O</h2>
+      <ul class="keys">
+        <li><span class="sw sw-mov"></span>Data movers: LD/ST, TMA, copy engines</li>
+        <li><span class="sw sw-ctrl"></span>Scheduling: GigaThread engine, warp schedulers</li>
+        <li><span class="sw sw-io"></span>Interfaces: NVLink, PCIe, C2C, NV-HBI, memory controllers</li>
+        <li><span class="sw dash sw-ghost"></span>Off-chip peer, or a block drawn in another panel</li>
+      </ul></section>
+    <section class="lg"><h2>Software abstractions</h2>
+      <ul class="keys">
+        <li><span class="sw dash sw-cluster"></span>Thread block cluster</li>
+        <li><span class="sw sw-cta"></span>CTA (thread block)</li>
+        <li><span class="sw sw-warp"></span>Warp (32 threads)</li>
+        <li><span class="sw sw-thread"></span>Thread (one lane)</li>
+      </ul></section>
+    <section class="lg"><h2>Line weight is bandwidth (thinner is faster)</h2>
+      <ul class="keys wl">
+        <li><svg viewBox="0 0 58 16"><line x1="2" y1="8" x2="56" y2="8" stroke-width=".9"/></svg>Registers ↔ ALUs (≈450 TB/s chip-wide, estimate)</li>
+        <li><svg viewBox="0 0 58 16"><line x1="2" y1="8" x2="56" y2="8" stroke-width="1.6"/></svg>TMEM ↔ Tensor Core, tcgen05.ld</li>
+        <li><svg viewBox="0 0 58 16"><line x1="2" y1="8" x2="56" y2="8" stroke-width="2.4"/></svg>SMEM ↔ SMSP, warp shuffle (128 B/clk per SM)</li>
+        <li><svg viewBox="0 0 58 16"><line x1="2" y1="8" x2="56" y2="8" stroke-width="3.4"/></svg>SM ↔ SM (DSMEM, within a GPC)</li>
+        <li><svg viewBox="0 0 58 16"><line x1="2" y1="8" x2="56" y2="8" stroke-width="4.6"/></svg>SM ↔ L2 ≈21 TB/s; NV-HBI 10 TB/s</li>
+        <li><svg viewBox="0 0 58 16"><line x1="2" y1="8" x2="56" y2="8" stroke-width="6"/></svg>L2 ↔ HBM3e, 8 TB/s</li>
+        <li><svg viewBox="0 0 58 16"><line x1="2" y1="8" x2="56" y2="8" stroke-width="8"/></svg>NVLink 5: 1.8 TB/s bidirectional</li>
+        <li><svg viewBox="0 0 58 16"><line x1="2" y1="8" x2="56" y2="8" stroke-width="10"/></svg>NVLink-C2C: 900 GB/s bidirectional</li>
+        <li><svg viewBox="0 0 58 16"><line x1="2" y1="8" x2="56" y2="8" stroke-width="12.5"/></svg>PCIe Gen6 ×16: 256 GB/s bidirectional</li>
+        <li><svg viewBox="0 0 58 16"><line class="ctl" x1="2" y1="8" x2="56" y2="8" stroke-width="1.2"/></svg>Control / issue (not a data path)</li>
+        <li><svg viewBox="0 0 58 16"><line class="ldr" x1="2" y1="8" x2="56" y2="8" stroke-width="1"/></svg>Leader line to a code card</li>
+      </ul></section>
+    <section class="lg"><h2>Software level ↔ hardware</h2>
+      <ul class="map">
+        <li><b>Grid</b> ↔ the whole GPU (2 dies, 8 GPCs, 148 SMs)</li>
+        <li><b>Cluster</b> ↔ a group of SMs in one GPC</li>
+        <li><b>CTA</b> ↔ one SM, which can host several CTAs</li>
+        <li><b>Warpgroup</b> (4 warps) ↔ the 4 SMSPs</li>
+        <li><b>Warp</b> ↔ one scheduler slot in an SMSP</li>
+        <li><b>Thread</b> ↔ one lane: a register column plus an ALU lane</li>
+      </ul></section>
+  </div>
+</header>
+<div class="toolbar">
+  <div class="tb wrap" role="toolbar" aria-label="View controls">
+    <button id="zFit" type="button">Fit width</button>
+    <button id="zOut" type="button" aria-label="Zoom out">−</button>
+    <span class="zv" id="zVal">100%</span>
+    <button id="zIn" type="button" aria-label="Zoom in">+</button>
+    <button id="z100" type="button">1:1</button>
+    <label class="tgl"><input type="checkbox" id="tNotes" checked>Show code cards</label>
+    <span class="hint">Ctrl / ⌘ + wheel to zoom, drag to pan. Hover a card or a numbered marker to highlight its hardware block.</span>
+  </div>
+</div>
+<div class="vp" id="vp">
+  <svg id="board" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="NVIDIA Blackwell B200 hierarchy from package to thread, annotated with CUDA C++ and PTX"></svg>
+</div>
+<footer class="notes wrap">
+  <p>This diagram targets the data-center Blackwell B200 (sm_100a). Consumer Blackwell (RTX 50 series, sm_120) has no TMEM and does not support tcgen05 instructions.</p>
+  <p>Illustrative, not measured: the block placement inside each die, which SMs are fused off, and the kernel and cluster assignment are examples. FP64 ×16 and SFU ×4 per SMSP are inferred from published throughput; the LD/ST unit count is not labeled. The L2 bandwidth figure is a third-party measurement.</p>
+  <p>Sources: NVIDIA Technical Blog, “Inside NVIDIA Blackwell Ultra” (Aug 2025); Chips and Cheese, “Nvidia’s B200: Keeping the CUDA Juggernaut Rolling” (Dec 2025); arXiv 2512.02189 (B200 microbenchmarks); CCCL libcu++ <code>cuda::ptx</code> documentation and the PTX ISA.</p>
+</footer>
+<script>
+(function(){
+'use strict';
+var NS='http://www.w3.org/2000/svg', XNS='http://www.w3.org/XML/1998/namespace';
+var svg=document.getElementById('board'), vp=document.getElementById('vp'), zVal=document.getElementById('zVal');
+var W=2300, CX0=600, CX1=1700, LCX=24, RCX=1736, CW=540;
+var TIER={1:0.9,2:1.6,3:2.4,4:3.4,5:4.6,6:6,7:8,8:10,9:12.5};
+var MEM={reg:1,smem:1,tmem:1,l2:1,hbm:1,ic:1};
+var UIF='"Barlow","PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Noto Sans SC","Microsoft YaHei",sans-serif';
+var CNF='"Barlow Semi Condensed","Barlow","PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Microsoft YaHei",sans-serif';
+var CATC={tc:'var(--tc-f)',tmem:'var(--tmem-s)',smem:'var(--smem-s)',reg:'var(--reg-s)',l2:'var(--l2-s)',hbm:'var(--hbm-s)',mov:'var(--mov-s)',ctrl:'var(--ctrl-s)',io:'var(--io-s)',fp32:'var(--fp32-s)',sfu:'var(--sfu-s)',cluster:'var(--cluster)',cta:'var(--cta-s)',warp:'var(--warp-f)',thread:'var(--thread-s)'};
+var R={}, L={}, H=3000, scale=1, fitMode=true, CARDS=[];
+var cv=document.createElement('canvas').getContext('2d');
+
+function mw(s,size,weight,fam){cv.font=(weight||400)+' '+size+'px '+(fam||CNF);return cv.measureText(s).width;}
+function E(tag,a,p){
+  var e=document.createElementNS(NS,tag);
+  if(a){for(var k in a){var v=a[k];if(v===null||v===undefined||v===false)continue;e.setAttribute(k,v);}}
+  if(p)p.appendChild(e);
+  return e;
+}
+function txt(p,x,y,s,size,o){
+  o=o||{};
+  var a={x:x,y:y,'font-size':size};
+  if(o.w)a['font-weight']=o.w;
+  if(o.a)a['text-anchor']=o.a;
+  if(o.cls)a['class']=o.cls;
+  if(o.fit)a['data-fit']=Math.round(o.fit);
+  if(o.tr)a.transform=o.tr;
+  if(o.db)a['dominant-baseline']=o.db;
+  var t=E('text',a,p);t.textContent=s;return t;
+}
+/* One hardware block: a category-colored rect; memory kinds get stripes */
+function blk(id,kind,x,y,w,h,lines,o){
+  o=o||{};
+  var g=E('g',{'class':'blk k-'+kind+(o.cls?' '+o.cls:'')},o.p||L.blocks);
+  var rx=(o.rx!=null)?o.rx:4;
+  E('rect',{'class':'b',x:x,y:y,width:w,height:h,rx:rx,'stroke-dasharray':o.dash||null},g);
+  if(MEM[kind]&&!o.nohatch)E('rect',{'class':'hatch',x:x,y:y,width:w,height:h,rx:rx},g);
+  if(lines&&lines.length){
+    var ls=lines.map(function(l){return typeof l==='string'?[l,12,600]:l;});
+    var tot=0;ls.forEach(function(l){tot+=l[1]*1.24;});
+    var cy=(o.ty!=null)?y+o.ty:y+h/2-tot/2;
+    var left=o.align==='left', pad=o.tx||7;
+    var tx=left?x+pad:x+w/2;
+    ls.forEach(function(l){cy+=l[1]*1.24;txt(g,tx,cy-l[1]*0.3,l[0],l[1],{w:l[2]||null,a:left?'start':'middle',fit:w-(left?pad+4:8)});});
+  }
+  if(id)R[id]={x:x,y:y,w:w,h:h};
+  return g;
+}
+function pathD(pts){var d='M'+pts[0][0]+','+pts[0][1];for(var i=1;i<pts.length;i++)d+=' L'+pts[i][0]+','+pts[i][1];return d;}
+/* Data path: stroke width by bandwidth tier, thinner is faster */
+function lnk(pts,tier,o){o=o||{};return E('path',{'class':'lnk',d:pathD(pts),'stroke-width':TIER[tier],'marker-end':o.arrow?'url(#mk-lnk)':null},L.links);}
+/* Control / issue relation: thin dotted line */
+function ctl(pts,o){o=o||{};return E('path',{'class':'ctl',d:pathD(pts),'marker-end':o.noarrow?null:'url(#mk-ctl)'},L.links);}
+function note(x,y,s,size,o){o=o||{};return txt(L.labels,x,y,s,size||11,{cls:o.cls||'capm',a:o.a||null,w:o.w||null,fit:o.fit||null});}
+
+function panel(letter,y,h,title,sub,sw){
+  E('rect',{'class':'panel-frame',x:CX0,y:y,width:CX1-CX0,height:h,rx:12},L.frames);
+  E('rect',{'class':'pbadge',x:CX0+14,y:y+12,width:28,height:28,rx:7},L.frames);
+  txt(L.frames,CX0+28,y+32,letter,17,{w:700,a:'middle',cls:'pbadge-t'});
+  var pw=mw(sw,12,600)+28;
+  var g=E('g',{'class':'swtag'},L.frames);
+  E('rect',{x:CX1-14-pw,y:y+13,width:pw,height:24,rx:12},g);
+  txt(g,CX1-14-pw/2,y+29.5,sw,12,{w:600,a:'middle'});
+  txt(L.frames,CX0+54,y+31,title,17,{w:700,cls:'cap',fit:CX1-CX0-96-pw});
+  txt(L.frames,CX0+54,y+49,sub,12,{cls:'capm',fit:CX1-CX0-70});
+}
+/* Zoom funnel: from the magnified block down to the next panel */
+function zoom(src,ty,label){
+  var x1=src.x,x2=src.x+src.w,y=src.y+src.h;
+  E('path',{'class':'zoom-fill',d:'M'+x1+','+y+' L'+x2+','+y+' L'+CX1+','+ty+' L'+CX0+','+ty+' Z'},L.zoom);
+  E('line',{'class':'zoom-edge',x1:x1,y1:y,x2:CX0,y2:ty},L.zoom);
+  E('line',{'class':'zoom-edge',x1:x2,y1:y,x2:CX1,y2:ty},L.zoom);
+  E('rect',{'class':'zoom-src',x:src.x-3,y:src.y-3,width:src.w+6,height:src.h+6,rx:5},L.top);
+  if(label){
+    var ly=ty-26, t=(ly-y)/(ty-y);
+    var lx=x1+(CX0-x1)*t, rx=x2+(CX1-x2)*t;
+    txt(L.labels,(lx+rx)/2,ly,label,13,{w:700,a:'middle',cls:'zoom-t'});
+  }
+}
+var NOSTART=/^[,.;:)!?’”]/;
+function wrap(s,maxW,size,weight,fam){
+  var toks=s.match(/\S+\s*|\s+/g)||[];
+  var out=[],line='';
+  for(var i=0;i<toks.length;i++){
+    var t=toks[i],test=line+t;
+    if(line.trim()&&mw(test.replace(/\s+$/,''),size,weight,fam)>maxW&&!NOSTART.test(t)){out.push(line.replace(/\s+$/,''));line=t.replace(/^\s+/,'');}
+    else line=test;
+  }
+  if(line.trim())out.push(line.replace(/\s+$/,''));
+  return out;
+}
+var KW={'__global__':1,'__shared__':1,'extern':1,'float':1,'float4':1,'int':1,'unsigned':1,'double':1,'uint32_t':1,'uint8_t':1,'auto':1,'if':1,'else':1,'for':1,'return':1,'namespace':1,'using':1,'const':1,'alignas':1,'dim3':1,'cudaDeviceProp':1,'__launch_bounds__':1,'__cluster_dims__':1,'sizeof':1,'reinterpret_cast':1,'void':1,'half':1};
+/* Minimal highlighter: PTX opcodes, registers, directives; C++ keywords, calls, numbers, comments */
+function tokenize(line,lang){
+  var out=[],code=line,cm='',ci=line.indexOf('//');
+  if(ci>=0){code=line.slice(0,ci);cm=line.slice(ci);}
+  var rest=code;
+  if(lang==='ptx'){
+    var tr=code.replace(/^\s+/,'');
+    if(tr&&!/^[.{\[]/.test(tr)){
+      var m0=code.match(/^(\s*)(@!?%\w+\s+)?([A-Za-z_][\w.:]*)/);
+      if(m0){out.push([m0[1],null]);if(m0[2])out.push([m0[2],'c-reg']);out.push([m0[3],'c-op']);rest=code.slice(m0[0].length);}
+    }
+  }
+  var re=/%[A-Za-z_][\w.]*|0x[0-9A-Fa-f]+|0f[0-9A-Fa-f]{8}|\d+(?:\.\d+)?f?|\.[A-Za-z_][\w:]*|[A-Za-z_]\w*(?:::\w+)*|<<<|>>>|\s+|[^\s]/g, m;
+  while((m=re.exec(rest))){
+    var t=m[0],c=null;
+    if(t.charAt(0)==='%')c='c-reg';
+    else if(/^(0x|0f[0-9A-Fa-f]{8}|\d)/.test(t))c='c-num';
+    else if(t.charAt(0)==='.'&&lang==='ptx')c='c-dir';
+    else if(t==='<<<'||t==='>>>')c='c-op';
+    else if(/^[A-Za-z_]/.test(t)){
+      if(KW[t])c='c-kw';
+      else if(/^\s*\(/.test(rest.slice(re.lastIndex)))c='c-fn';
+    }
+    out.push([t,c]);
+  }
+  if(cm)out.push([cm,'c-cm']);
+  return out;
+}
+/* Squeeze text that would overflow its block */
+function fitTexts(){
+  var ts=svg.querySelectorAll('text[data-fit]');
+  for(var i=0;i<ts.length;i++){
+    var t=ts[i];t.removeAttribute('textLength');t.removeAttribute('lengthAdjust');
+    var m=+t.getAttribute('data-fit'),w=0;
+    try{w=t.getComputedTextLength();}catch(e){}
+    if(m&&w>m){t.setAttribute('textLength',m);t.setAttribute('lengthAdjust','spacingAndGlyphs');}
+  }
+}
+
+/* ---------- Panel A: package ---------- */
+function smMini(x,y){
+  E('rect',{'class':'sm-mini',x:x,y:y,width:16,height:30,rx:2},L.blocks);
+  E('rect',{'class':'g-tc',x:x+2,y:y+3,width:12,height:4,rx:1},L.blocks);
+  E('rect',{'class':'g-cuda',x:x+2,y:y+9,width:12,height:8,rx:1},L.blocks);
+  E('rect',{'class':'g-tmem',x:x+2,y:y+19,width:12,height:3},L.blocks);
+  E('rect',{'class':'g-smem',x:x+2,y:y+24,width:12,height:3},L.blocks);
+}
+function gpcA(id,gi,x,y,dis){
+  E('rect',{'class':'cont-gpc',x:x,y:y,width:110,height:228,rx:5},L.conts);
+  txt(L.conts,x+7,y+15,'GPC '+gi,11.5,{w:700,cls:'cap'});
+  txt(L.conts,x+103,y+15,(20-dis.length)+' SMs',10,{a:'end',cls:'cap2'});
+  for(var t=0;t<10;t++){
+    var r=Math.floor(t/2),c=t%2,tx=x+14+c*44,ty=y+24+r*40;
+    E('rect',{'class':'cont-tpc',x:tx,y:ty,width:38,height:36,rx:3},L.conts);
+    for(var k=0;k<2;k++){
+      var sm=2*t+k,sx=tx+2+k*18,sy=ty+3;
+      if(dis.indexOf(sm)>=0)E('rect',{'class':'sm-off',x:sx,y:sy,width:16,height:30,rx:2},L.blocks);
+      else smMini(sx,sy);
+    }
+  }
+  R[id]={x:x,y:y,w:110,h:228};
+}
+function die(d,x,y){
+  E('rect',{'class':'cont-die',x:x,y:y,width:480,height:386,rx:8},L.conts);
+  txt(L.conts,x+10,y+15,'Die '+d,12,{w:700,cls:'cap'});
+  txt(L.conts,x+52,y+15,'74 of 80 SMs enabled',10.5,{cls:'cap2'});
+  var items=d===0?[
+    ['gt_d0','ctrl',100,'GigaThread engine','dispatches CTAs'],
+    ['pcie_d0','io',92,'PCIe Gen6 ×16','host interface'],
+    ['c2c_d0','io',80,'NVLink-C2C','to Grace CPU'],
+    ['ce_d0','mov',86,'Copy engines','DMA copies'],
+    ['nvl_d0','io',82,'NVLink 5','GPU ↔ GPU']
+  ]:[
+    ['gt_d1','ctrl',100,'GigaThread engine','dispatches CTAs'],
+    ['ce_d1','mov',86,'Copy engines','DMA copies'],
+    ['dec_d1','mov',80,'Decompression','engine'],
+    ['nvdec_d1','mov',92,'NVDEC / NVJPG','video, JPEG decode'],
+    ['nvl_d1','io',82,'NVLink 5','GPU ↔ GPU']
+  ];
+  var cx=x+8;
+  items.forEach(function(it){blk(it[0],it[1],cx,y+22,it[2],34,[[it[3],11,600],[it[4],9.5,400]]);cx+=it[2]+6;});
+  var DIS=d===0?[[19],[3,14],[8],[5,16]]:[[12],[1,18],[7,10],[15]];
+  var gt=R['gt_d'+d],busY=y+61,gpcY=y+66;
+  ctl([[gt.x+gt.w/2,gt.y+gt.h],[gt.x+gt.w/2,busY],[x+8+3*118+55,busY]],{noarrow:true});
+  for(var g=0;g<4;g++){
+    var gx=x+8+g*118;
+    ctl([[gx+55,busY],[gx+55,gpcY]],{noarrow:true});
+    gpcA('gpc'+(d*4+g),d*4+g,gx,gpcY,DIS[g]);
+    lnk([[gx+55,gpcY+228],[gx+55,y+306]],5);
+  }
+  blk('l2_d'+d,'l2',x+8,y+306,464,40,[['L2 cache: 2 partitions on this die, ≈63 MB',12,700],['126 MB in total; the other die’s partitions are reached over NV-HBI, fully coherent',10,400]]);
+  for(var i=0;i<4;i++){
+    var mx=x+9+i*118;
+    blk(null,'io',mx,y+356,108,22,[['Memory ctrl ×2',10,600]]);
+    lnk([[mx+54,y+346],[mx+54,y+356]],6);
+    lnk([[mx+54,y+378],[mx+54,y+404]],6);
+    blk('hbm_d'+d+'_'+i,'hbm',mx,y+404,108,50,[['HBM3e',12.5,700],['24 GB, ≈1 TB/s',10,400]]);
+  }
+}
+function panelA(y0){
+  var HA=644;
+  panel('A',y0,HA,'GPU package: B200','Two reticle-sized dies (TSMC 4NP, 208B transistors in total) joined by NV-HBI into one CUDA GPU; 160 physical SMs (8 GPCs × 20), 148 enabled on B200','Software: grid (all CTAs of one launch)');
+  var gy=y0+60;
+  blk('host','ghost',646,gy,150,34,[['Host CPU (x86 / Arm)',11.5,600],['PCIe Gen6 ×16, 256 GB/s',9.5,400]]);
+  blk('grace','ghost',806,gy,132,34,[['Grace CPU',11.5,600],['NVLink-C2C, 900 GB/s',9.5,400]]);
+  blk('nvsw','ghost',1236,gy,300,34,[['NVLink Switch / other GPUs',11.5,600],['NVLink 5: 18 links, 1.8 TB/s bidirectional',9.5,400]]);
+  var dieY=y0+128,pkgY=dieY-14,pkgB=dieY+480;
+  E('rect',{'class':'cont-pkg',x:636,y:pkgY,width:1028,height:pkgB-pkgY,rx:10},L.conts);
+  note(1654,pkgB-7,'B200 package (block placement inside each die is illustrative)',10.5,{a:'end'});
+  die(0,650,dieY);die(1,1170,dieY);
+  var nh=E('g',{'class':'blk k-io'},L.blocks);
+  E('rect',{'class':'b',x:1136,y:dieY+22,width:28,height:356,rx:4},nh);
+  var cyy=dieY+200;
+  txt(nh,1150,cyy,'NV-HBI die-to-die link, 10 TB/s',11.5,{w:600,a:'middle',db:'central',tr:'rotate(-90 1150 '+cyy+')'});
+  R.nvhbi={x:1136,y:dieY+22,w:28,h:356};
+  lnk([[1122,dieY+326],[1136,dieY+326]],5);
+  lnk([[1164,dieY+326],[1178,dieY+326]],5);
+  var hy=y0+106,gb=gy+34,pc=R.pcie_d0,c2=R.c2c_d0,n0=R.nvl_d0,n1=R.nvl_d1;
+  lnk([[pc.x+pc.w/2,pc.y],[pc.x+pc.w/2,hy],[721,hy],[721,gb]],9);
+  lnk([[c2.x+c2.w/2,c2.y],[c2.x+c2.w/2,hy],[872,hy],[872,gb]],8);
+  lnk([[n0.x+n0.w/2,n0.y],[n0.x+n0.w/2,hy],[1330,hy],[1330,gb]],7);
+  lnk([[n1.x+n1.w/2,n1.y],[n1.x+n1.w/2,hy],[1442,hy],[1442,gb]],7);
+  note(646,pkgB+20,'SM glyph: red = 4 Tensor Cores, green = 128 CUDA cores, violet = 256 KB TMEM, blue = 256 KB L1 / SMEM; hatched = SM fused off for yield (6 per die, positions illustrative)',11,{fit:1030});
+  return HA;
+}
+
+/* ---------- Panel B: GPC ---------- */
+function smGlyph(x,y,w){
+  for(var i=0;i<4;i++)E('rect',{'class':'g-tc',x:x+i*7,y:y,width:5.5,height:5.5,rx:1},L.blocks);
+  E('rect',{'class':'g-cuda',x:x+30,y:y,width:w-30,height:5.5,rx:1},L.blocks);
+  var hw=(w-3)/2;
+  E('rect',{'class':'g-tmem',x:x,y:y+8,width:hw,height:4,rx:1},L.blocks);
+  E('rect',{'class':'g-smem',x:x+hw+3,y:y+8,width:hw,height:4,rx:1},L.blocks);
+}
+function chip(x,y,cl,rank){
+  var g=E('g',{'class':'blk k-cta'},L.blocks);
+  E('rect',{'class':'b',x:x,y:y,width:36,height:40,rx:3},g);
+  txt(g,x+18,y+12,'cl'+cl,10,{w:700,a:'middle'});
+  txt(g,x+18,y+22,'r'+rank,9,{a:'middle'});
+  for(var i=0;i<8;i++)E('rect',{'class':'warp-tick',x:x+4+(i%4)*7.3,y:y+26+Math.floor(i/4)*6,width:5.5,height:4.2,rx:0.6},g);
+}
+function panelB(y0){
+  var HB=386;
+  panel('B',y0,HB,'GPC 0 zoomed in: 10 TPCs, two SMs each','CTAs of one cluster are guaranteed to be co-resident in the same GPC; with tcgen05 cta_group::2, a CTA pair on two SMs shares one MMA','Software: thread block cluster');
+  var fx=616,fy=y0+58,fw=1068,fh=268;
+  E('rect',{'class':'cont-gpc',x:fx,y:fy,width:fw,height:fh,rx:8},L.conts);
+  R.gpc_b={x:fx,y:fy,w:fw,h:fh};
+  txt(L.conts,fx+12,fy+18,'GPC 0',13,{w:700,cls:'cap'});
+  txt(L.conts,fx+fw-12,fy+18,'19 usable SMs; SM 19 is fused off (illustrative)',11,{a:'end',cls:'capm'});
+  var tw=97,inX=fx+12,gap=(fw-24-10*tw)/9,ty=fy+26,busY=fy+250;
+  for(var t=0;t<10;t++){
+    var tx=inX+t*(tw+gap),ax=tx+7,sw=tw-14,ay=ty+20,by=ty+110;
+    E('rect',{'class':'cont-tpc',x:tx,y:ty,width:tw,height:200,rx:5},L.conts);
+    txt(L.conts,tx+6,ty+13,'TPC '+t,10.5,{w:600,cls:'cap2'});
+    E('rect',{'class':'cont-sm',x:ax,y:ay,width:sw,height:84,rx:4},L.conts);
+    if(t===0)R.sm0_b={x:ax,y:ay,w:sw,h:84};
+    txt(L.conts,ax+5,ay+13,'SM '+(2*t),10.5,{w:700,cls:'cap'});
+    smGlyph(ax+5,ay+18,sw-10);
+    E('rect',{'class':'cont-sm',x:ax,y:by,width:sw,height:84,rx:4},L.conts);
+    lnk([[ax,ay+60],[tx+3.5,ay+60],[tx+3.5,busY]],4);
+    if(t<9){
+      smGlyph(ax+5,by+52,sw-10);
+      txt(L.conts,ax+5,by+78,'SM '+(2*t+1),10.5,{w:700,cls:'cap'});
+      for(var k=0;k<2;k++){
+        var cx=ax+4+k*39,cl=2*t+k,bh=(by+49)-(ay+35);
+        chip(cx,ay+38,cl,0);chip(cx,by+6,cl,1);
+        E('rect',{'class':'cl-box',x:cx-3,y:ay+35,width:42,height:bh,rx:5},L.top);
+        R['cl_'+cl]={x:cx-3,y:ay+35,w:42,h:bh};
+      }
+      lnk([[ax+sw/2,by+84],[ax+sw/2,busY]],4);
+    }else{
+      note(ax+sw/2,ay+54,'Idle',12,{a:'middle',w:700});
+      note(ax+sw/2,ay+68,'no SM to pair with',9.5,{a:'middle',cls:'cap2'});
+      E('rect',{'class':'sm-off',x:ax,y:by,width:sw,height:84,rx:4},L.blocks);
+      note(ax+sw/2,by+46,'SM 19 fused off',11,{a:'middle',w:600});
+    }
+  }
+  lnk([[fx+16,busY],[fx+fw-16,busY]],4);
+  R.bus_b={x:fx+16,y:busY-4,w:fw-32,h:8};
+  note(fx+16,busY+15,'SM-to-SM network: CTAs of a cluster read and write each other’s shared memory over it (DSMEM)',11);
+  var gy=y0+338;
+  blk('l2_b','ghost',1236,gy,214,34,[['L2 / on-chip NoC (see A)',11,600],['≈21 TB/s chip-wide (measured)',9.5,400]]);
+  lnk([[1343,fy+fh],[1343,gy]],5);
+  blk('gt_b','ghost',1462,gy,210,34,[['GigaThread engine (see A)',11,600],['places each cluster as a unit',9.5,400]]);
+  ctl([[1567,gy],[1567,fy+fh+1]]);
+  note(628,gy+10,'Magenta dashed box: one cluster (here __cluster_dims__(2,1,1))',11);
+  note(628,gy+25,'Two CTAs per SM; “cl3 r1” is the CTA with rank 1 in cluster 3',11);
+  note(628,gy+40,'The yellow ticks inside a CTA are its 8 warps',11);
+  return HB;
+}
+
+/* ---------- Panel C: SM ---------- */
+function tmemQ(s,x,y){
+  var g=blk('tmem_c'+s,'tmem',x,y,204,76,null);
+  txt(g,x+7,y+14,'TMEM lanes '+(32*s)+'–'+(32*s+31)+' (64 KB)',11,{w:700,fit:190});
+  txt(g,x+7,y+27,'only warps with warp_id % 4 = '+s,10,{fit:190});
+  E('rect',{'class':'tseg',x:x+5,y:y+34,width:95,height:36,rx:3},g);
+  E('rect',{'class':'tseg tseg1',x:x+104,y:y+34,width:95,height:36,rx:3},g);
+  txt(g,x+52.5,y+56,'CTA 0: cols 0–255',10,{a:'middle',fit:88});
+  txt(g,x+151.5,y+56,'CTA 1: cols 256–511',10,{a:'middle',fit:88});
+}
+function smspC(s,x,sy,y0){
+  E('rect',{'class':'cont-smsp',x:x,y:sy,width:225,height:300,rx:6},L.conts);
+  R['smsp_c'+s]={x:x,y:sy,w:225,h:300};
+  txt(L.conts,x+8,sy+15,'SMSP '+s,12,{w:700,cls:'cap'});
+  txt(L.conts,x+217,sy+15,'16 warp slots',10,{a:'end',cls:'cap2'});
+  blk(null,'ic',x+8,sy+22,54,20,[['L0 I$',10.5,600]]);
+  blk('sched_c'+s,'ctrl',x+68,sy+22,144,20,[['Warp scheduler + dispatch',10.5,600]]);
+  E('rect',{'class':'cont-pool',x:x+8,y:sy+48,width:204,height:50,rx:4},L.conts);
+  var slw=(204-4-7*2)/8;
+  var occ=[['C0','W'+s,0],['C0','W'+(s+4),0],['C1','W'+s,1],['C1','W'+(s+4),1]];
+  for(var i=0;i<16;i++){
+    var c=i%8,r=Math.floor(i/8),px=x+10+c*(slw+2),py=sy+50+r*24;
+    if(r===0&&c<4){var o=occ[c];blk(null,'warp',px,py,slw,22,[[o[0],9,700],[o[1],9,600]],{rx:2,dash:o[2]?'3 2':null});}
+    else E('rect',{'class':'slot-empty',x:px,y:py,width:slw,height:22,rx:2},L.blocks);
+  }
+  blk('rf_c'+s,'reg',x+8,sy+104,204,34,[['Register file 64 KB',11.5,700],['16384 × 32 bit',10,400]]);
+  blk(null,'fp32',x+8,sy+146,88,32,[['FP32/INT32',10.5,700],['×32',10,400]]);
+  blk(null,'fp64',x+106,sy+146,48,32,[['FP64',10.5,700],['×16',10,400]]);
+  blk(null,'sfu',x+164,sy+146,48,32,[['SFU',10.5,700],['×4',10,400]]);
+  blk(null,'mov',x+8,sy+186,204,24,[['LD/ST units',10.5,600]]);
+  blk('tc_c'+s,'tc',x+8,sy+218,204,70,[['Tensor Core (5th gen)',13,700],['A, B from SMEM; accumulator D in TMEM',10,400]]);
+  lnk([[x+52,sy+138],[x+52,sy+146]],1);
+  lnk([[x+130,sy+138],[x+130,sy+146]],1);
+  lnk([[x+188,sy+138],[x+188,sy+146]],1);
+  lnk([[x+101,sy+138],[x+101,sy+186]],1);
+  ctl([[x+56,y0+108],[x+56,sy+22]]);
+  var ty=y0+430;
+  tmemQ(s,x+8,ty);
+  lnk([[x+110,sy+288],[x+110,ty]],2);
+  lnk([[x+212,ty+20],[x+219,ty+20],[x+219,sy+121],[x+212,sy+121]],2);
+  lnk([[x+4,y0+520],[x+4,sy+253],[x+8,sy+253]],3);
+  lnk([[x+4,sy+253],[x+4,sy+198],[x+8,sy+198]],3);
+}
+function panelC(y0){
+  var HC=646;
+  panel('C',y0,HC,'SM 0 zoomed in: 4 SMSPs sharing L1 / SMEM, TMEM and TMA','Per SM: 128 CUDA cores, 4 Tensor Cores, 64K 32-bit registers, 256 KB L1 / SMEM, 256 KB TMEM; up to 64 resident warps and 32 CTAs','Software: CTA (thread block)');
+  var fx=616,fy=y0+58,fw=960,fh=540;
+  E('rect',{'class':'cont-sm',x:fx,y:fy,width:fw,height:fh,rx:8},L.conts);
+  txt(L.conts,fx+12,fy+18,'SM 0 (upper SM of TPC 0)',13,{w:700,cls:'cap'});
+  E('rect',{'class':'tseg',x:1236,y:fy+8,width:18,height:12,rx:2},L.labels);
+  note(1260,fy+18,'CTA 0 = cl0 r0',11);
+  E('rect',{'class':'tseg tseg1',x:1384,y:fy+8,width:18,height:12,rx:2},L.labels);
+  note(1408,fy+18,'CTA 1 = cl1 r0',11);
+  blk('icache_c','ic',628,y0+86,936,22,[['L1 instruction cache, shared by the 4 SMSPs',11,600]]);
+  var sy=y0+118;
+  for(var s=0;s<4;s++)smspC(s,628+s*237,sy,y0);
+  /* L1 / SMEM split by CTA */
+  var smy=y0+520;
+  var sg=E('g',{'class':'blk k-smem'},L.blocks);
+  E('rect',{'class':'b',x:628,y:smy,width:834,height:66,rx:4},sg);
+  E('rect',{'class':'hatch',x:628,y:smy,width:834,height:66,rx:4},sg);
+  txt(sg,652,smy+15,'L1 data cache / shared memory: 256 KB total, up to 228 KB usable as SMEM',11.5,{w:700});
+  R.smem_c={x:628,y:smy,w:834,h:66};
+  var k=826/256,sx=632;
+  [['smem_c0','smem',100,'CTA 0 __shared__: ≈100 KB','multi-stage A / B tile buffers + mbarriers','seg-cta',null],
+   ['smem_c1','smem',100,'CTA 1 __shared__: ≈100 KB','multi-stage A / B tile buffers + mbarriers','seg-cta','5 3'],
+   ['smem_free','ghost',28,'Unallocated','≈28 KB',null,null],
+   ['smem_l1','smem',28,'L1 cache','≈28 KB',null,null]].forEach(function(sgm){
+    var w=sgm[2]*k-3;
+    blk(sgm[0],sgm[1],sx,smy+22,w,38,[[sgm[3],10.5,700],[sgm[4],9.5,400]],{cls:sgm[5],dash:sgm[6]});
+    sx+=sgm[2]*k;
+  });
+  blk('tma_c','mov',1474,smy,90,66,[['TMA',13,700],['tensor copies',10,400],['global ↔ SMEM',9,400]]);
+  lnk([[1462,smy+33],[1474,smy+33]],3);
+  blk('peer_c','ghost',1590,y0+430,94,62,[['SM 1',11.5,700],['peer SM',10,400],['same cluster',9.5,400]]);
+  blk('l2_c','ghost',1590,smy+14,94,40,[['L2 / NoC',11,700],['(see A)',9.5,400]]);
+  lnk([[1564,smy+33],[1590,smy+33]],5);
+  lnk([[1250,smy],[1250,smy-7],[1637,smy-7],[1637,y0+492]],4);
+  note(1643,y0+503,'DSMEM',9.5);
+  var l1=R.smem_l1,l1x=l1.x+l1.w/2;
+  lnk([[l1x,smy+66],[l1x,smy+73],[1637,smy+73],[1637,smy+54]],5);
+  note(628,y0+618,'Links: the vertical line left of each SMSP is the SMEM path to LD/ST and the Tensor Core; the line on its right is tcgen05.ld (TMEM → registers).',11,{fit:1050});
+  note(628,y0+634,'Example kernel: a warp-specialized GEMM with 8 warps per CTA. W0 issues TMA, W1 issues tcgen05.mma, and W4–W7 form the epilogue warpgroup; warp w usually lands on SMSP w % 4.',11,{fit:1050});
+  return HC;
+}
+
+/* ---------- Panel D: SMSP ---------- */
+function rfD(x,y,w,h){
+  var g=E('g',{'class':'blk k-reg'},L.blocks);
+  E('rect',{'class':'b',x:x,y:y,width:w,height:h,rx:5},g);
+  E('rect',{'class':'hatch',x:x,y:y,width:w,height:h,rx:5},g);
+  txt(g,x+10,y+18,'Register file 64 KB',13,{w:700});
+  txt(g,x+10,y+33,'16384 × 32 bit, split into 32 lane columns',10.5,{});
+  var gx=x+8,gw=w-16,cw=gw/32,gy=y+50,gh=h-58;
+  [0,8,16,24,31].forEach(function(l){txt(g,gx+(l+0.5)*cw,gy-4,String(l),8.5,{a:'middle'});});
+  var bands=[['C0 W0','TMA producer'],['C0 W4','epilogue'],['C1 W0','TMA producer'],['C1 W4','epilogue']];
+  var bh=(gh-18)/4;
+  bands.forEach(function(b,i){
+    var by=gy+i*(bh+6);
+    E('rect',{'class':'rf-band',x:gx,y:by,width:gw,height:bh,rx:3,'stroke-dasharray':i>=2?'4 2':null},g);
+    for(var l=1;l<32;l++)E('line',{'class':'rf-grid',x1:gx+l*cw,y1:by,x2:gx+l*cw,y2:by+bh},g);
+    for(var q=1;q<4;q++)E('line',{'class':'rf-grid',x1:gx,y1:by+q*bh/4,x2:gx+gw,y2:by+q*bh/4},g);
+    txt(g,gx+6,by+16,b[0]+' ('+b[1]+'): R0–R127',10.5,{w:700,cls:'rf-lbl'});
+    txt(g,gx+6,by+30,'32 lanes × 128 regs × 4 B = 16 KB',9.5,{cls:'rf-lbl'});
+  });
+  R.rf_d={x:x,y:y,w:w,h:h};
+}
+function panelD(y0){
+  var HD=522;
+  panel('D',y0,HD,'SMSP 0 zoomed in: warp scheduling, registers, execution units and the Tensor Core','An SMSP issues at most one warp instruction per cycle. Here 4 resident warps × 128 registers per thread fill the 64 KB register file exactly','Software: warp (32 threads)');
+  E('rect',{'class':'cont-smsp',x:616,y:y0+58,width:932,height:440,rx:8},L.conts);
+  txt(L.conts,628,y0+76,'SMSP 0',13,{w:700,cls:'cap'});
+  /* control column */
+  blk(null,'ic',644,y0+88,204,28,[['L0 instruction cache',11.5,600]]);
+  blk('sched_d','ctrl',644,y0+126,204,44,[['Warp scheduler',12.5,700],['issues one ready warp per cycle',10,400]]);
+  blk(null,'ctrl',644,y0+180,204,28,[['Dispatch: 32 threads / cycle',11,600]]);
+  ctl([[746,y0+116],[746,y0+126]]);
+  ctl([[746,y0+170],[746,y0+180]]);
+  E('rect',{'class':'cont-pool',x:628,y:y0+218,width:220,height:260,rx:5},L.conts);
+  note(636,y0+234,'Warp slots: up to 16, 4 in use here',10.5);
+  var slw=47.5,slh=51.5;
+  var occ=[['C0 W0','TMA','producer',0],['C0 W4','epilogue',null,0],['C1 W0','TMA','producer',1],['C1 W4','epilogue',null,1]];
+  for(var i=0;i<16;i++){
+    var c=i%4,r=Math.floor(i/4),px=634+c*(slw+6),py=y0+242+r*(slh+6);
+    if(r===0){
+      var o=occ[c],ls=[[o[0],11,700],[o[1],9.5,400]];if(o[2])ls.push([o[2],9.5,400]);
+      blk(c===1?'warp_d_sel':null,'warp',px,py,slw,slh,ls,{rx:3,dash:o[3]?'4 2':null});
+    }else E('rect',{'class':'slot-empty',x:px,y:py,width:slw,height:slh,rx:3},L.blocks);
+  }
+  ctl([[636,y0+218],[636,y0+148],[644,y0+148]]);
+  /* register file */
+  rfD(864,y0+88,308,374);
+  /* execution units */
+  var fp=blk('fp32_d','fp32',1188,y0+88,212,74,null);
+  txt(fp,1196,y0+104,'FP32 / INT32 ×32',12,{w:700});
+  var cwc=(212-16-15*2)/16;
+  for(var rr=0;rr<2;rr++)for(i=0;i<16;i++)E('rect',{'class':'cuda-cell',x:1196+i*(cwc+2),y:y0+112+rr*16,width:cwc,height:12,rx:1.5},fp);
+  txt(fp,1196,y0+156,'32 FMAs per cycle: one warp instruction',9.5,{fit:196});
+  var f6=blk('fp64_d','fp64',1188,y0+172,212,50,null);
+  txt(f6,1196,y0+188,'FP64 ×16 (half the FP32 rate)',11.5,{w:700,fit:196});
+  for(i=0;i<16;i++)E('rect',{'class':'c64',x:1196+i*(cwc+2),y:y0+198,width:cwc,height:12,rx:1.5},f6);
+  var sf=blk('sfu_d','sfu',1188,y0+232,212,46,null);
+  txt(sf,1196,y0+250,'SFU ×4',11.5,{w:700});
+  for(i=0;i<4;i++)E('rect',{'class':'csfu',x:1250+i*17,y:y0+240,width:13,height:12,rx:1.5},sf);
+  txt(sf,1196,y0+270,'ex2, lg2, sin, cos, rcp, rsqrt',10,{fit:196});
+  blk('ldst_d','mov',1188,y0+288,212,32,[['LD/ST units',11.5,700],['shared, global, local, atomics',9.5,400]]);
+  var tc=blk('tc_d','tc',1188,y0+330,212,132,null);
+  txt(tc,1196,y0+350,'Tensor Core (5th gen)',15,{w:700,fit:196});
+  txt(tc,1196,y0+366,'tcgen05.mma: one-thread issue, async',10.5,{fit:196});
+  txt(tc,1196,y0+381,'1024 16-bit MACs per cycle per SMSP',10.5,{fit:196});
+  blk(null,'smem',1198,y0+390,34,30,[['A',12,700]]);
+  txt(tc,1242,y0+410,'×',14,{w:700,a:'middle'});
+  blk(null,'smem',1252,y0+390,34,30,[['B',12,700]]);
+  txt(tc,1301,y0+410,'→',14,{w:700,a:'middle'});
+  blk(null,'tmem',1316,y0+390,40,30,[['D',12,700]]);
+  txt(tc,1215,y0+433,'SMEM',9,{a:'middle'});
+  txt(tc,1269,y0+433,'SMEM',9,{a:'middle'});
+  txt(tc,1336,y0+433,'TMEM accum',9,{a:'middle'});
+  txt(tc,1196,y0+455,'FP4 / FP6 / FP8 / FP16 / BF16 / TF32 / INT8',9.5,{fit:196});
+  /* this SMSP's TMEM quarter and the SM-wide SMEM */
+  var tq=blk('tmem_d','tmem',1416,y0+350,120,112,null);
+  [['TMEM',12.5,700,367],['lane 0–31',10.5,600,382],['× 512 cols × 32 bit',10,400,396],['= 64 KB',10,400,410],['private to this SMSP',10,400,428],['one of 4 per SM',10,400,442]].forEach(function(l){txt(tq,1424,y0+l[3],l[0],l[1],{w:l[2],fit:106});});
+  blk('smem_d','smem',1564,y0+288,120,80,[['SMEM / L1',12,700],['shared by 4 SMSPs',10,400],['(see panel C)',10,400]]);
+  /* links */
+  [125,197,255,304].forEach(function(yy){lnk([[1172,y0+yy],[1188,y0+yy]],1);});
+  lnk([[1172,y0+406],[1188,y0+406]],1);
+  lnk([[1400,y0+304],[1564,y0+304]],3);
+  lnk([[1400,y0+342],[1564,y0+342]],3);
+  note(1408,y0+299,'ld / st.shared',9.5);
+  note(1408,y0+337,'A, B via SMEM descriptors',9.5);
+  lnk([[1400,y0+406],[1416,y0+406]],2);
+  lnk([[1476,y0+462],[1476,y0+474],[1018,y0+474],[1018,y0+462]],2);
+  note(1247,y0+491,'tcgen05.ld: TMEM → registers',10.5,{a:'middle'});
+  ctl([[848,y0+194],[856,y0+194],[856,y0+82],[1294,y0+82],[1294,y0+88]]);
+  note(1075,y0+78,'issue to execution units',10,{a:'middle',cls:'cap2'});
+  return HD;
+}
+
+/* ---------- Panel E: the 32 threads of one warp ---------- */
+function panelE(y0){
+  var HE=358;
+  panel('E',y0,HE,'Warp zoomed in: the 32 threads of C0 W4, an epilogue warp','All 32 lanes execute the same instruction (SIMT); each thread keeps its own registers and program counter (independent thread scheduling since Volta)','Software: thread (lanes 0–31)');
+  blk('warp_e','warp',700,y0+60,972,28,[['Warp C0 W4: threadIdx.x = 128–159; together with W5–W7 it forms a warpgroup',12,700]]);
+  var cw=(972-31*3)/32;
+  function X(i){return 700+i*(cw+3);}
+  var base=y0+134,i,k;
+  for(i=0;i<16;i++){
+    var x1=X(i+16)+cw/2,x2=X(i)+cw/2,mx=(x1+x2)/2;
+    E('path',{'class':'shfl',d:'M'+x1+','+base+' Q'+mx+','+(base-72)+' '+x2+','+base,'stroke-width':TIER[3],'marker-end':'url(#mk-lnk)'},L.links);
+  }
+  R.shfl_e={x:X(0),y:base-38,w:X(31)+cw-X(0),h:36};
+  for(i=0;i<32;i++){
+    blk(null,'thread',X(i),base,cw,30,[[String(i),11,700],[String(128+i),8.5,400]],{rx:3});
+    E('rect',{'class':i<24?'mask-on':'mask-off',x:X(i)+2,y:y0+168,width:cw-4,height:9,rx:1.5},L.blocks);
+    for(k=0;k<4;k++)E('rect',{'class':'reg-cell',x:X(i),y:y0+184+k*11,width:cw,height:9,rx:1.5},L.blocks);
+    note(X(i)+cw/2,y0+238,'⋮',10,{a:'middle',cls:'cap2'});
+    E('rect',{'class':'reg-cell',x:X(i),y:y0+242,width:cw,height:9,rx:1.5},L.blocks);
+    lnk([[X(i)+9,y0+251],[X(i)+9,y0+260]],1);
+    E('rect',{'class':'alu-cell',x:X(i)+2,y:y0+260,width:14,height:14,rx:2},L.blocks);
+    lnk([[X(i)+cw-5,y0+288],[X(i)+cw-5,y0+251]],2);
+  }
+  R.regs_e={x:700,y:y0+184,w:972,h:67};
+  var tm=blk('tmem_e','tmem',700,y0+288,972,18,null);
+  for(i=1;i<32;i++)E('line',{'class':'rf-grid',x1:X(i)-1.5,y1:y0+288,x2:X(i)-1.5,y2:y0+306},tm);
+  txt(tm,1186,y0+301,'TMEM lanes 0–31: tcgen05.ld 32x32b.x16 copies 16 columns of each lane into 16 registers of the matching thread',10.5,{w:600,a:'middle',cls:'tm-lbl'});
+  /* row labels */
+  note(692,y0+113,'shfl.down 16',10,{a:'end'});
+  note(692,y0+126,'lane exchange',10,{a:'end',cls:'cap2'});
+  note(692,y0+147,'lane',10,{a:'end'});
+  note(692,y0+159,'threadIdx.x',9,{a:'end',cls:'cap2'});
+  note(692,y0+176,'active mask',10,{a:'end'});
+  ['R0','R1','R2','R3'].forEach(function(s,j){note(692,y0+192+j*11,s,9,{a:'end'});});
+  note(692,y0+238,'⋮',10,{a:'end',cls:'cap2'});
+  note(692,y0+250,'R127',9,{a:'end'});
+  note(692,y0+271,'FP32 lane',10,{a:'end'});
+  note(692,y0+301,'TMEM',10,{a:'end'});
+  note(628,y0+330,'Inside if (lane < 24) only lanes 0–23 are active (mask 0x00FFFFFF); the hatched lanes sit out that code and reconverge after the branch.',11,{fit:1050});
+  note(628,y0+346,'With the 32x32b shape, lane i reads TMEM row i (W4 % 4 = 0, so lanes 0–31); .x16 means 16 consecutive columns.',11,{fit:1050});
+  return HE;
+}
+
+/* ---------- Code cards: t = target block id, at = marker position as a fraction of the block ---------- */
+var CARD_DATA=[
+{t:'gt_d0',cat:'ctrl',title:'Kernel launch and thread indexing',
+ hw:'Hardware: the GigaThread engine dispatches CTAs (or whole clusters) to SMs',sw:'Software: grid, blockIdx, threadIdx',
+ cpp:['dim3 grid(148), block(256);','gemm<<<grid, block, smem_bytes, stream>>>(A, B, C);','// device side: global thread index','int i = blockIdx.x * blockDim.x + threadIdx.x;'],
+ ptx:['.visible .entry gemm(.param .u64 A, .param .u64 B, .param .u64 C)','mov.u32     %r1, %ctaid.x;        // blockIdx.x','mov.u32     %r2, %ntid.x;         // blockDim.x','mov.u32     %r3, %tid.x;          // threadIdx.x','mad.lo.s32  %r4, %r1, %r2, %r3;   // i'],
+ note:'<<<>>> only submits work from the host. The GigaThread engine decides which SM each CTA lands on, based on each SM’s free registers, shared memory and warp slots.'},
+{t:'nvhbi',cat:'io',title:'Two dies, one CUDA device',
+ hw:'Hardware: NV-HBI die-to-die link at 10 TB/s; L2 stays fully coherent',sw:'Software: a single device; code never deals with dies',
+ cpp:['cudaDeviceProp p;','cudaGetDeviceProperties(&p, 0);','p.major * 10 + p.minor;   // 100, i.e. sm_100','p.multiProcessorCount;    // 148 across both dies','p.l2CacheSize;            // L2 of both dies combined'],
+ ptx:['.version 8.7','.target sm_100a          // the a suffix enables tcgen05 etc.','mov.u32  %r1, %smid;     // ID of the SM running this thread'],
+ note:'Compile with nvcc -arch=sm_100a. Reaching the L2 partition on the other die costs extra latency but never affects correctness.'},
+{t:'ce_d0',cat:'mov',title:'Host ↔ device: copy engines',
+ hw:'Hardware: copy engines (DMA) over PCIe Gen6 or NVLink-C2C',sw:'Software: cudaMemcpyAsync and streams',
+ cpp:['cudaMallocHost(&h, bytes);              // pinned host memory','cudaMemcpyAsync(d, h, bytes, cudaMemcpyHostToDevice, s);','gemm<<<grid, block, 0, s>>>(d);         // runs after the copy in s'],
+ ptx:['// No PTX: copy engines do the work, no SM is involved'],
+ note:'In GB200, the Grace CPU connects over NVLink-C2C (900 GB/s), and the GPU can access CPU memory coherently.'},
+{t:'nvl_d1',cat:'io',title:'NVLink 5: direct GPU-to-GPU memory access',
+ hw:'Hardware: NVLink 5, 18 links, 1.8 TB/s bidirectional',sw:'Software: peer-to-peer access, unified virtual addressing (UVA)',
+ cpp:['cudaSetDevice(0);','cudaDeviceEnablePeerAccess(1, 0);          // allow access to GPU 1','cudaMemcpyPeerAsync(dst, 1, src, 0, bytes, s);','// inside a kernel: write straight into peer memory','peer[i] = v;','__threadfence_system();'],
+ ptx:['st.global.f32  [%rd9], %f1;     // address lives in GPU 1 memory','membar.sys;                     // same semantics as fence.sc.sys'],
+ note:'Collectives usually go through NCCL or NVSHMEM. Behind an NVLink Switch, multimem.* instructions can reduce data inside the switch.'},
+{t:'l2_d0',cat:'l2',title:'L2: cache hints, atomics and memory ordering',
+ hw:'Hardware: 126 MB of L2 in 4 partitions, 2 per die',sw:'Software: cache hints, atomics, memory fences',
+ cpp:['float a = __ldcg(&p[i]);        // cache in L2 only, skip L1','__stcs(&q[i], a);               // streaming store, evict first','atomicAdd(&hist[bin], 1.0f);    // atomic resolved in L2','__threadfence();                // GPU-scope ordering'],
+ ptx:['ld.global.cg.f32    %f1, [%rd2];','st.global.cs.f32    [%rd3], %f1;','red.global.add.f32  [%rd4], %f2;    // result unused, so red','membar.gl;                          // same as fence.sc.gpu'],
+ note:'Set a persistent L2 window from the host with cudaStreamSetAttribute (accessPolicyWindow); the device-side counterparts are cache hints such as createpolicy and L2::evict_last.'},
+{t:'hbm_d1_0',cat:'hbm',title:'Global memory (HBM3e)',
+ hw:'Hardware: 8 HBM3e stacks, up to 192 GB, 8 TB/s',sw:'Software: global memory, allocated with cudaMalloc',
+ cpp:['float  v = in[i];                                   // plain load','out[i] = v;                                         // store','float  w = __ldg(&in[i]);                           // read-only path','float4 q = reinterpret_cast<const float4*>(in)[i];  // 128-bit access'],
+ ptx:['ld.global.f32     %f1, [%rd4];','st.global.f32     [%rd6], %f1;','ld.global.nc.f32  %f2, [%rd4];','ld.global.v4.f32  {%f3, %f4, %f5, %f6}, [%rd8];'],
+ note:'When the 32 threads of a warp touch consecutive addresses, their accesses coalesce into as few memory transactions as possible; float4 fetches 16 bytes per thread at once.'},
+{t:'cl_0',cat:'cluster',title:'Thread block clusters',
+ hw:'Hardware: a group of SMs within one GPC',sw:'Software: clusters, portable up to 8 CTAs, non-portable up to 16',
+ cpp:['namespace cg = cooperative_groups;','__global__ void __cluster_dims__(2, 1, 1) gemm(/* … */) {','  cg::cluster_group cl = cg::this_cluster();','  unsigned rank = cl.block_rank();      // 0 or 1','  cl.sync();                            // cluster-wide barrier','}'],
+ ptx:['.entry gemm(.param .u64 A) .reqnctapercluster 2, 1, 1','mov.u32  %r1, %cluster_ctarank;','barrier.cluster.arrive;','barrier.cluster.wait;'],
+ note:'CTAs in one cluster are guaranteed to be co-resident in the same GPC. If the cluster size does not divide the GPC’s usable SM count, some SMs sit idle, like SM 18 in the diagram.'},
+{t:'bus_b',cat:'smem',at:[0.97,0],title:'Distributed shared memory (DSMEM)',
+ hw:'Hardware: the SM-to-SM network inside a GPC',sw:'Software: read and write the __shared__ memory of other CTAs in the cluster',
+ cpp:['auto cl = cg::this_cluster();','__shared__ float buf[256];','float* peer = cl.map_shared_rank(buf, cl.block_rank() ^ 1);','peer[threadIdx.x] = x;      // lands in another SM\'s shared memory','cl.sync();                  // sync before the peer reads it'],
+ ptx:['mov.u32                   %r2, buf;       // this CTA\'s shared address','mapa.shared::cluster.u32  %r3, %r2, %r4;  // %r4 = target CTA rank','st.shared::cluster.f32    [%r3], %f1;'],
+ note:'CTAs exchange data without a round trip through L2. TMA can also multicast one tile to several CTAs of the cluster.'},
+{t:'smem_c0',cat:'smem',title:'Shared memory and CTA-wide sync',
+ hw:'Hardware: 256 KB of L1 / SMEM, up to 228 KB as SMEM (227 KB per CTA)',sw:'Software: __shared__, __syncthreads()',
+ cpp:['__shared__ float tile[32][33];     // +1 column avoids bank conflicts','extern __shared__ uint8_t smem[];  // size set by <<<g, b, bytes>>>','tile[threadIdx.y][threadIdx.x] = g[idx];','__syncthreads();                   // barrier for the whole CTA','cudaFuncSetAttribute(gemm,','    cudaFuncAttributeMaxDynamicSharedMemorySize, 200 * 1024);'],
+ ptx:['.shared .align 4 .b8 tile[4224];','.extern .shared .align 16 .b8 smem[];','st.shared.f32  [%r5], %f1;','bar.sync       0;'],
+ note:'SMEM has 32 banks, each 4 bytes wide. Dynamic SMEM above 48 KB must first be enabled with cudaFuncSetAttribute.'},
+{t:'tma_c',cat:'mov',title:'TMA: async tensor copies with mbarrier',
+ hw:'Hardware: one TMA unit (Tensor Memory Accelerator) per SM',sw:'Software: cp.async.bulk.tensor and mbarrier (cuda::barrier)',
+ cpp:['namespace cde = cuda::device::experimental;','__shared__ alignas(128) float tile[64 * 64];','__shared__ cuda::barrier<cuda::thread_scope_block> bar; // init() first','cuda::barrier<cuda::thread_scope_block>::arrival_token tok;','if (threadIdx.x == 0) {','  cde::cp_async_bulk_tensor_2d_global_to_shared(tile, &tmap, x, y, bar);','  tok = cuda::device::barrier_arrive_tx(bar, 1, sizeof(tile));','} else tok = bar.arrive();','bar.wait(std::move(tok));'],
+ ptx:['mbarrier.init.shared::cta.b64  [%r1], 256;','mbarrier.arrive.expect_tx.shared::cta.b64  %rd2, [%r1], 16384;','cp.async.bulk.tensor.2d.shared::cluster.global.mbarrier::complete_tx::bytes','    [%r2], [%rd1, {%r3, %r4}], [%r1];','mbarrier.try_wait.shared::cta.b64  %p1, [%r1], %rd2;'],
+ note:'The host builds the CUtensorMap with cuTensorMapEncodeTiled and passes it as a __grid_constant__ parameter. One thread starts the copy; the hardware moves the whole tile and then updates the mbarrier.'},
+{t:'tmem_c3',cat:'tmem',title:'TMEM allocation (new in Blackwell)',
+ hw:'Hardware: 256 KB per SM, 128 lanes × 512 columns × 32 bit',sw:'Software: tcgen05.alloc / dealloc, allocated by column',
+ cpp:['__shared__ uint32_t tmem_base;      // the address is written here','if (warp_id == 0)                   // a whole warp must execute it','  cuda::ptx::tcgen05_alloc(cuda::ptx::cta_group_1, &tmem_base, 256);','// … MMA and epilogue …','if (warp_id == 0)','  cuda::ptx::tcgen05_dealloc(cuda::ptx::cta_group_1, tmem_base, 256);'],
+ ptx:['tcgen05.alloc.cta_group::1.sync.aligned.shared::cta.b32  [%r1], 256;','tcgen05.relinquish_alloc_permit.cta_group::1.sync.aligned;','tcgen05.dealloc.cta_group::1.sync.aligned.b32  %r2, 256;'],
+ note:'Column counts are powers of two from 32 to 512, and an address is lane << 16 | column. Here each of the two CTAs gets 256 columns.'},
+{t:'sched_d',cat:'ctrl',title:'Warp scheduling: warp and lane IDs',
+ hw:'Hardware: the warp scheduler picks one ready warp to issue each cycle',sw:'Software: a warp is 32 threads with consecutive threadIdx',
+ cpp:['int lane = threadIdx.x & 31;           // 0..31','int warp = threadIdx.x >> 5;           // warp index within the CTA','if      (warp == 0) tma_producer();    // warp specialization','else if (warp == 1) mma_issuer();','else if (warp >= 4) epilogue();        // W4..W7: one warpgroup'],
+ ptx:['mov.u32  %r1, %tid.x;','and.b32  %r2, %r1, 31;     // lane','shr.u32  %r3, %r1, 5;      // warp','mov.u32  %r4, %laneid;     // hardware lane ID','mov.u32  %r5, %warpid;     // physical slot, may change'],
+ note:'An SM holds up to 64 warps, 16 per SMSP. warp_id % 4 selects the TMEM lane quarter a warp may access, which is usually also the SMSP it runs on. %warpid is not a stable logical ID.'},
+{t:'fp32_d',cat:'fp32',title:'CUDA core scalar math and the SFU',
+ hw:'Hardware: per SMSP, FP32/INT32 ×32, FP64 ×16, SFU ×4',sw:'Software: one scalar instruction per thread, executed by all 32 lanes of the warp together',
+ cpp:['float  c = fmaf(a, b, c);     // FP32 FMA','int    k = i * n + j;         // INT32 multiply-add','double z = fma(x, y, z);      // FP64','float  s = __sinf(t);         // SFU approximation'],
+ ptx:['fma.rn.f32      %f4, %f1, %f2, %f3;','mad.lo.s32      %r4, %r1, %r2, %r3;','fma.rn.f64      %fd4, %fd1, %fd2, %fd3;','sin.approx.f32  %f6, %f5;'],
+ note:'On B200, FP64 runs at half the FP32 rate, and scalar FP16 is no longer twice as fast as FP32; half-precision matrix math belongs on the Tensor Cores.'},
+{t:'tc_d',cat:'tc',title:'Tensor Core: tcgen05.mma (5th gen)',
+ hw:'Hardware: 5th-gen Tensor Core with its accumulator in TMEM',sw:'Software: issued by one thread, runs asynchronously, signals completion through an mbarrier',
+ cpp:['if (warp_id == 1 && cute::elect_one_sync()) {   // pick one thread','  cuda::ptx::tcgen05_mma(cuda::ptx::kind_f16, cuda::ptx::cta_group_1,','                         d_tmem, a_desc, b_desc, idesc, accumulate);','  cuda::ptx::tcgen05_commit(cuda::ptx::cta_group_1, &mma_bar);','}','// CUTLASS / CuTe: cute::gemm(tiled_mma, tCrA, tCrB, tCtAcc);'],
+ ptx:['elect.sync  %r9|%p2, 0xffffffff;','@%p2 tcgen05.mma.cta_group::1.kind::f16  [%r1], %rd2, %rd3, %r4, %p1;','@%p2 tcgen05.commit.cta_group::1.mbarrier::arrive::one.shared::cluster.b64','         [%r7];','// NVFP4 with block scaling:','tcgen05.mma.cta_group::1.kind::mxf4nvf4.block_scale.scale_vec::4X','    [%r1], %rd2, %rd3, %r4, [%r5], [%r6], %p1;'],
+ note:'kind can be f16, tf32, f8f6f4 or i8, or the block-scaled mxf8f6f4, mxf4 and mxf4nvf4. cta_group::2 lets a CTA pair in a cluster run one MMA across two SMs. An M = 128 MMA fills all 128 TMEM lanes, spread across the 4 SMSPs.'},
+{t:'rf_d',cat:'tc',at:[0,0.86],title:'Warp-level MMA (legacy path)',
+ hw:'Hardware: the same Tensor Cores, with operands and accumulators in registers',sw:'Software: wmma / mma.sync, the Volta and Ampere style',
+ cpp:['using namespace nvcuda;','wmma::fragment<wmma::matrix_a, 16, 16, 16, half, wmma::row_major> a;','wmma::load_matrix_sync(a, smA, 16);','wmma::mma_sync(c, a, b, c);             // 32 threads cooperate'],
+ ptx:['wmma.load.a.sync.aligned.row.m16n16k16.shared.f16','    {%r0, …, %r7}, [%r9], 16;','wmma.mma.sync.aligned.row.col.m16n16k16.f32.f32','    {%f0, …, %f7}, {%r0, …, %r7}, {%r10, …, %r17}, {%f0, …, %f7};','mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 {…}, {…}, {…}, {…};'],
+ note:'sm_100 still supports this path, but it bypasses TMEM and cannot reach tcgen05 peak throughput. Hopper’s wgmma is not available on sm_100.'},
+{t:'shfl_e',cat:'warp',title:'Intra-warp communication: shuffle, vote, reduce',
+ hw:'Hardware: a lane-to-lane exchange network that bypasses SMEM',sw:'Software: the *_sync intrinsics',
+ cpp:['for (int o = 16; o > 0; o >>= 1)','  v += __shfl_down_sync(0xffffffff, v, o);      // tree reduction','unsigned m = __ballot_sync(0xffffffff, x > 0.f);','unsigned s = __reduce_add_sync(0xffffffff, u);  // HW integer reduce','__syncwarp();'],
+ ptx:['shfl.sync.down.b32    %r2, %r1, 16, 0x1f, 0xffffffff;','vote.sync.ballot.b32  %r3, %p1, 0xffffffff;','redux.sync.add.u32    %r4, %r5, 0xffffffff;','bar.warp.sync         0xffffffff;'],
+ note:'0xffffffff means all 32 lanes take part. After divergence, pass the real active mask, or the result is undefined.'},
+{t:'regs_e',cat:'reg',title:'Thread-private state: registers, predicates, local memory',
+ hw:'Hardware: one register column per lane, up to 255 registers per thread',sw:'Software: local variables',
+ cpp:['float acc = 0.f;                   // lives in a register','float y = (x > 0.f) ? a : b;       // predicated select, no branch','float buf[64]; buf[k] = v;         // dynamic index → local memory','__global__ void __launch_bounds__(256, 2) gemm(/* … */);','// caps register use so 2 CTAs fit on each SM'],
+ ptx:['.reg .f32   %f<32>;','.reg .pred  %p<4>;','setp.gt.f32   %p1, %f1, 0f00000000;','selp.f32      %f4, %f2, %f3, %p1;','st.local.f32  [%rd5], %f6;'],
+ note:'Registers per thread × resident threads must fit in the SM’s 64K registers, which directly sets occupancy. Local memory physically lives in DRAM and is cached in L1 and L2.'},
+{t:'tmem_e',cat:'tmem',title:'tcgen05.ld: TMEM → registers',
+ hw:'Hardware: a dedicated path from TMEM into the register file',sw:'Software: a warp can only access the 32 lanes selected by warp_id % 4',
+ cpp:['uint32_t acc[16];','uint32_t lane0 = 32 * (warp_id % 4);        // this warp\'s lane quarter','uint32_t taddr = tmem_base + (lane0 << 16) + col;','cuda::ptx::tcgen05_ld_32x32b(acc, taddr);   // 16 columns per thread','cuda::ptx::tcgen05_wait_ld();'],
+ ptx:['tcgen05.ld.sync.aligned.32x32b.x16.b32','    {%r0, %r1, …, %r15}, [%r20];','tcgen05.wait::ld.sync.aligned;'],
+ note:'With the 32x32b shape, lane i reads TMEM row lane0 + i, and .x16 means 16 consecutive columns. Warps W4–W7 together read all 128 rows.'}
+];
+CARD_DATA.forEach(function(c,i){c.n=i+1;});
+CARDS=CARD_DATA;
+
+/* ---------- Card rendering and placement ---------- */
+function codeBlock(g,x,y,w,lab,lines,lang){
+  var lh=14.5,padT=7,gut=20,h=padT*2+lines.length*lh;
+  E('rect',{'class':'codebg',x:x,y:y,width:w,height:h,rx:5},g);
+  E('path',{'class':'codegut',d:'M'+(x+5)+','+y+' H'+(x+gut)+' V'+(y+h)+' H'+(x+5)+' Q'+x+','+(y+h)+' '+x+','+(y+h-5)+' V'+(y+5)+' Q'+x+','+y+' '+(x+5)+','+y+' Z'},g);
+  var cx=x+gut/2,cy=y+h/2;
+  txt(g,cx,cy,lab,9.5,{w:700,a:'middle',db:'central',cls:'codegut-t',tr:'rotate(-90 '+cx+' '+cy+')'});
+  lines.forEach(function(ln,i){
+    var t=E('text',{'class':'code',x:x+gut+8,y:y+padT+11+i*lh,'font-size':10.5,'data-fit':w-gut-14},g);
+    t.setAttributeNS(XNS,'xml:space','preserve');
+    tokenize(ln,lang).forEach(function(tk){
+      if(tk[1]){var s=E('tspan',{'class':tk[1]},t);s.textContent=tk[0];}
+      else t.appendChild(document.createTextNode(tk[0]));
+    });
+  });
+  return y+h;
+}
+function buildCard(c){
+  var g=E('g',{'class':'card cat-'+c.cat,'data-n':c.n,style:'--c:'+CATC[c.cat],tabindex:'0',role:'group','aria-label':c.n+'. '+c.title},L.cards);
+  var x=c.x,inner=CW-32,y;
+  var bg=E('rect',{'class':'card-b',x:x,y:0,width:CW,height:10,rx:9},g);
+  var acc=E('rect',{'class':'card-accent',x:x,y:14,width:4,height:10,rx:2},g);
+  E('circle',{'class':'card-badge',cx:x+28,cy:24,r:12},g);
+  txt(g,x+28,28.5,String(c.n),12,{w:700,a:'middle',cls:'card-badge-t'});
+  txt(g,x+48,29.5,c.title,15.5,{w:700,cls:'card-title',fit:CW-60});
+  y=50;
+  [c.hw,c.sw].forEach(function(s){wrap(s,CW-62,12.5,400,UIF).forEach(function(ln){txt(g,x+48,y,ln,12.5,{cls:'card-sub'});y+=17;});});
+  y+=2;
+  y=codeBlock(g,x+16,y,inner,'C++',c.cpp,'cpp');
+  y+=7;
+  y=codeBlock(g,x+16,y,inner,'PTX',c.ptx,'ptx');
+  y+=7;
+  wrap(c.note,inner,12,400,UIF).forEach(function(ln){txt(g,x+16,y+13,ln,12,{cls:'card-note'});y+=17;});
+  y+=12;
+  bg.setAttribute('height',y);acc.setAttribute('height',y-28);
+  c.h=y;c.g=g;
+}
+function placeCards(){
+  var lb=24,rb=24,gap=14;
+  CARDS.forEach(function(c){
+    var t=R[c.t];
+    if(!t){console.warn('missing target',c.t);return;}
+    var natL=(t.x+t.w*(c.at?c.at[0]:0.5))<1150;
+    var ay=c.at?t.y+t.h*c.at[1]:t.y;
+    var ty=Math.max(24,ay-34),cl=Math.max(lb,ty),cr=Math.max(rb,ty);
+    c.side=(Math.abs(cl-cr)<90)?(natL?'L':'R'):(cl<cr?'L':'R');
+    c.x=c.side==='L'?LCX:RCX;
+    buildCard(c);
+    c.y=c.side==='L'?cl:cr;
+    c.g.setAttribute('transform','translate(0,'+c.y+')');
+    if(c.side==='L')lb=c.y+c.h+gap;else rb=c.y+c.h+gap;
+  });
+  return Math.max(lb,rb);
+}
+function drawLeaders(){
+  CARDS.forEach(function(c){
+    var t=R[c.t];if(!t||!c.g)return;
+    var bx,by;
+    if(c.at){bx=t.x+t.w*c.at[0];by=t.y+t.h*c.at[1];}
+    else if(c.side==='L'){bx=t.x;by=t.y;}
+    else{bx=t.x+t.w;by=t.y;}
+    var ax=c.side==='L'?LCX+CW:RCX,ay=c.y+24,s=c.side==='L'?1:-1,dx=Math.abs(bx-ax);
+    var k1=Math.min(220,dx*0.5),k2=Math.min(80,dx*0.25);
+    var d='M'+ax+','+ay+' C'+(ax+s*k1)+','+ay+' '+(bx-s*k2)+','+by+' '+bx+','+by;
+    c.leader=E('path',{'class':'leader',d:d,style:'--c:'+CATC[c.cat]},L.leaders);
+    var bg=E('g',{'class':'tbadge cat-'+c.cat,style:'--c:'+CATC[c.cat],role:'button','aria-label':'Go to card '+c.n},L.badges);
+    E('circle',{cx:bx,cy:by,r:10},bg);
+    txt(bg,bx,by+4,String(c.n),11,{w:700,a:'middle'});
+    c.badge=bg;
+  });
+}
+function setHL(c,on){
+  if(!c.g)return;
+  c.g.classList.toggle('hl',on);c.badge.classList.toggle('hl',on);
+  (c.hlEls||[]).forEach(function(e){e.remove();});c.hlEls=[];
+  if(on){
+    var t=R[c.t];
+    var p=c.leader.cloneNode();p.setAttribute('class','leader hl');L.top.appendChild(p);c.hlEls.push(p);
+    c.hlEls.push(E('rect',{'class':'hlbox',x:t.x-4,y:t.y-4,width:t.w+8,height:t.h+8,rx:6,style:'--c:'+CATC[c.cat]},L.top));
+  }
+}
+function bindCards(){
+  CARDS.forEach(function(c){
+    if(!c.g)return;
+    var on=function(){setHL(c,true);},off=function(){setHL(c,false);};
+    c.g.addEventListener('mouseenter',on);c.g.addEventListener('mouseleave',off);
+    c.g.addEventListener('focus',on);c.g.addEventListener('blur',off);
+    c.badge.addEventListener('mouseenter',on);c.badge.addEventListener('mouseleave',off);
+    c.badge.addEventListener('click',function(){if(dragMoved)return;focusBoard(c.x,c.y,CW,c.h);});
+    c.g.addEventListener('click',function(){
+      if(dragMoved)return;
+      if(window.getSelection&&String(window.getSelection()))return;
+      var t=R[c.t];focusBoard(t.x,t.y,t.w,t.h);
+    });
+  });
+}
+
+/* ---------- Assembly ---------- */
+function defs(){
+  var d=E('defs',null,svg);
+  var p=E('pattern',{id:'hatch',width:6,height:4,patternUnits:'userSpaceOnUse'},d);
+  E('path',{'class':'hatch-line',d:'M0 1H6'},p);
+  var o=E('pattern',{id:'offhatch',width:6,height:6,patternUnits:'userSpaceOnUse',patternTransform:'rotate(45)'},d);
+  E('rect',{'class':'off-bg',width:6,height:6},o);
+  E('path',{'class':'off-line',d:'M0 0V6'},o);
+  var g=E('pattern',{id:'gridp',width:24,height:24,patternUnits:'userSpaceOnUse'},d);
+  E('path',{'class':'grid-line',d:'M24 0H0V24'},g);
+  var m1=E('marker',{id:'mk-ctl',viewBox:'0 0 8 8',refX:7,refY:4,markerWidth:7,markerHeight:7,orient:'auto'},d);
+  E('path',{'class':'arrow-ctl',d:'M0,0 L8,4 L0,8 z'},m1);
+  var m2=E('marker',{id:'mk-lnk',viewBox:'0 0 8 8',refX:7,refY:4,markerWidth:3.2,markerHeight:3.2,orient:'auto'},d);
+  E('path',{'class':'arrow-lnk',d:'M0,0 L8,4 L0,8 z'},m2);
+}
+function build(){
+  while(svg.firstChild)svg.removeChild(svg.firstChild);
+  R={};L={};
+  defs();
+  ['bg','frames','zoom','conts','leaders','links','blocks','labels','top','badges','cards'].forEach(function(n){L[n]=E('g',{'class':n},svg);});
+  var A0=24,B0,C0,D0,E0,h;
+  h=panelA(A0);B0=A0+h+70;
+  h=panelB(B0);C0=B0+h+70;
+  h=panelC(C0);D0=C0+h+70;
+  h=panelD(D0);E0=D0+h+70;
+  h=panelE(E0);
+  zoom(R.gpc0,B0,'Zoom into GPC 0');
+  zoom(R.sm0_b,C0,'Zoom into SM 0');
+  zoom(R.smsp_c0,D0,'Zoom into SMSP 0');
+  zoom(R.warp_d_sel,E0,'Zoom into warp C0 W4');
+  var cb=placeCards();
+  H=Math.ceil(Math.max(E0+h,cb)+24);
+  E('rect',{'class':'bg-paper',x:0,y:0,width:W,height:H,rx:14},L.bg);
+  E('rect',{x:0,y:0,width:W,height:H,rx:14,fill:'url(#gridp)'},L.bg);
+  drawLeaders();bindCards();
+  svg.setAttribute('viewBox','0 0 '+W+' '+H);
+  applyScale();
+  fitTexts();
+}
+
+/* ---------- Zoom and pan ---------- */
+function applyScale(){
+  svg.style.width=(W*scale)+'px';svg.style.height=(H*scale)+'px';
+  zVal.textContent=Math.round(scale*100)+'%';
+}
+function setScale(s,pt){
+  s=Math.max(0.15,Math.min(3,s));
+  var r,bx,by;
+  if(pt){r=svg.getBoundingClientRect();bx=(pt.x-r.left)/scale;by=(pt.y-r.top)/scale;}
+  scale=s;applyScale();
+  if(pt){var r2=svg.getBoundingClientRect();vp.scrollLeft+=(r2.left+bx*s)-pt.x;window.scrollBy(0,(r2.top+by*s)-pt.y);}
+}
+function fit(){fitMode=true;setScale((vp.clientWidth-4)/W);}
+function focusBoard(x,y,w,h){
+  if(scale<0.95){fitMode=false;setScale(1);}
+  var r=svg.getBoundingClientRect();
+  var cx=r.left+(x+w/2)*scale,cy=r.top+(y+h/2)*scale;
+  vp.scrollBy({left:cx-window.innerWidth/2,behavior:'smooth'});
+  window.scrollBy({top:cy-window.innerHeight/2,behavior:'smooth'});
+}
+var dragMoved=false,drag=null;
+vp.addEventListener('pointerdown',function(e){
+  if(e.pointerType!=='mouse'||e.button!==0)return;
+  if(e.target.closest&&e.target.closest('.card'))return;
+  drag={x:e.clientX,y:e.clientY};dragMoved=false;
+});
+window.addEventListener('pointermove',function(e){
+  if(!drag)return;
+  var dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+  if(!dragMoved&&Math.abs(dx)+Math.abs(dy)<4)return;
+  if(!dragMoved){dragMoved=true;vp.classList.add('dragging');}
+  vp.scrollLeft-=dx;window.scrollBy(0,-dy);
+  drag.x=e.clientX;drag.y=e.clientY;
+});
+window.addEventListener('pointerup',function(){
+  if(!drag)return;drag=null;vp.classList.remove('dragging');
+  setTimeout(function(){dragMoved=false;},0);
+});
+vp.addEventListener('wheel',function(e){
+  if(!(e.ctrlKey||e.metaKey))return;
+  e.preventDefault();fitMode=false;
+  setScale(scale*Math.exp(-e.deltaY*0.0015),{x:e.clientX,y:e.clientY});
+},{passive:false});
+vp.addEventListener('dblclick',function(e){
+  if(e.target.closest&&e.target.closest('.card'))return;
+  if(scale<0.9){fitMode=false;setScale(1,{x:e.clientX,y:e.clientY});}else fit();
+});
+document.getElementById('zFit').addEventListener('click',fit);
+document.getElementById('zIn').addEventListener('click',function(){fitMode=false;setScale(scale*1.25,{x:window.innerWidth/2,y:window.innerHeight/2});});
+document.getElementById('zOut').addEventListener('click',function(){fitMode=false;setScale(scale/1.25,{x:window.innerWidth/2,y:window.innerHeight/2});});
+document.getElementById('z100').addEventListener('click',function(){fitMode=false;setScale(1,{x:window.innerWidth/2,y:window.innerHeight/2});});
+var tN=document.getElementById('tNotes');
+tN.addEventListener('change',function(){svg.classList.toggle('hide-notes',!tN.checked);if(tN.checked)fitTexts();});
+var rt=null;
+window.addEventListener('resize',function(){clearTimeout(rt);rt=setTimeout(function(){if(fitMode)fit();},120);});
+
+build();fit();
+if(document.fonts){
+  var ft=null;
+  var rebuild=function(){clearTimeout(ft);ft=setTimeout(function(){build();if(fitMode)fit();},150);};
+  document.fonts.addEventListener('loadingdone',rebuild);
+  if(document.fonts.ready)document.fonts.ready.then(rebuild);
+}
+})();
+
+</script>
+</body>
+</html>
