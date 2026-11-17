@@ -1,0 +1,3 @@
+nowadays ai is the only best teacher, professor, text books, tech documents, playgrounds, ...
+
+u do not copy this repo; instead, you ask ur AI to DIY ur own
