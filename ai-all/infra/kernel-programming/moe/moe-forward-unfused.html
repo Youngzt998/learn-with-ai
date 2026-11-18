@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MoE layer forward, one kernel launch per step (no fusion): every tensor and interface</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  color-scheme:light;
+  --font-ui:"Barlow",system-ui,-apple-system,"Segoe UI","PingFang SC","Noto Sans SC",sans-serif;
+  --font-cond:"Barlow Semi Condensed","Barlow",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono","SFMono-Regular",Menlo,Consolas,monospace;
+  --page:#f9f9f7;--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--ink3:#898781;
+  --hair:#e1e0d9;--base:#c3c2b7;--code-bg:#f1f0ec;
+  --c-in:#008300;--c-param:#e87ba4;--c-act:#2a78d6;--c-meta:#eda100;--on-meta:#0b0b0b;
+  --q1:#b7d3f6;--q2:#9ec5f4;--q3:#86b6ef;--q4:#6da7ec;--q5:#5598e7;--q6:#3987e5;
+  --q7:#2a78d6;--q8:#256abf;--q9:#1c5cab;--q10:#184f95;--q11:#104281;
+  --cell:14px;--gap:2px;--seg:7px;--split:5px;--bpad:7px;
+}
+@media (prefers-color-scheme:dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme:dark;
+    --page:#0d0d0d;--surface:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;--ink3:#898781;
+    --hair:#2c2c2a;--base:#383835;--code-bg:#232321;
+    --c-in:#008300;--c-param:#d55181;--c-act:#3987e5;--c-meta:#c98500;--on-meta:#0b0b0b;
+    --q1:#104281;--q2:#184f95;--q3:#1c5cab;--q4:#256abf;--q5:#2a78d6;--q6:#3987e5;
+    --q7:#5598e7;--q8:#6da7ec;--q9:#86b6ef;--q10:#9ec5f4;--q11:#b7d3f6;
+  }
+}
+*{box-sizing:border-box}
+html{background:var(--page)}
+body{margin:0;color:var(--ink);background:var(--page);font:15px/1.5 var(--font-ui)}
+.wrap{max-width:1480px;margin:0 auto;padding:0 28px}
+code{font-family:var(--font-mono)}
+h1{font-size:28px;line-height:1.25;font-weight:600;margin:30px 0 10px;letter-spacing:-.01em}
+.nf{display:inline-block;font:600 13px/1 var(--font-cond);letter-spacing:.05em;text-transform:uppercase;border:1.5px dashed var(--ink);border-radius:999px;padding:6px 11px;vertical-align:5px;margin-left:8px;white-space:nowrap}
+.lede{max-width:980px;color:var(--ink2);margin:0 0 18px;font-size:16px}
+
+.legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:16px 30px;padding:16px 18px;background:var(--surface);border:1px solid var(--hair);border-radius:12px}
+.lg h2{font:600 12px/1.2 var(--font-cond);letter-spacing:.07em;text-transform:uppercase;color:var(--ink2);margin:0 0 10px}
+.lg ul{list-style:none;margin:0;padding:0;display:grid;gap:9px}
+.lg li{display:flex;gap:10px;align-items:flex-start;font-size:14px;line-height:1.35}
+.lg li>div{min-width:0}
+.lg small{display:block;color:var(--ink2);font-size:13px}
+.sw{flex:0 0 auto;display:inline-block;width:var(--cell);height:var(--cell);border-radius:2px;margin-top:2px}
+.sw.in{background:var(--c-in)}.sw.param{background:var(--c-param)}.sw.act{background:var(--c-act)}
+.sw.meta{background:var(--c-meta);color:var(--on-meta);font:600 9px/var(--cell) var(--font-mono);text-align:center}
+.mini{flex:0 0 auto;display:inline-flex;gap:var(--gap);margin-top:1px}
+.mini.strip{padding:3px;border:1.5px solid var(--ink2);border-radius:7px}
+.mini.m2{flex-direction:column;position:relative;padding:3px var(--bpad)}
+.mini.m2::before,.mini.m2::after{content:"";position:absolute;top:0;bottom:0;width:4px;border:1.5px solid var(--ink2)}
+.mini.m2::before{left:0;border-right:0}.mini.m2::after{right:0;border-left:0}
+.mini .r{display:flex;gap:var(--gap)}
+.mini.m3{gap:6px;padding:5px 6px;border:1.5px dashed var(--ink3);border-radius:7px}
+.mini.m3 .m2{display:inline-flex}
+.dash{flex:0 0 46px;border-top:2px dashed var(--ink3);margin-top:9px}
+
+.tl{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0 22px}
+.tlg{background:var(--surface);border:1px solid var(--hair);border-radius:10px;padding:7px 9px}
+.tlh{font:600 12px/1.2 var(--font-cond);letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);margin:0 0 5px 2px}
+.tlr{display:flex;flex-wrap:wrap}
+.tli{font:12.5px/1 var(--font-mono);color:var(--ink);text-decoration:none;padding:6px 8px;border-left:1.5px dashed var(--ink3);white-space:nowrap}
+.tli:first-child{border-left:0}
+.tli b{display:inline-block;min-width:18px;text-align:center;font-weight:600;color:var(--page);background:var(--ink);border-radius:999px;padding:2px 5px;margin-right:3px}
+.tli.opt b{background:transparent;color:var(--ink);border:1px dashed var(--ink);padding:1px 4px}
+.tli i{font-style:normal;color:var(--ink2)}
+.tli:hover{background:var(--code-bg);border-radius:6px}
+
+.bar{position:sticky;top:0;z-index:20;background:var(--page);border-top:1px solid var(--hair);border-bottom:1px solid var(--hair)}
+.bar-in{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;max-width:1480px;margin:0 auto;padding:9px 28px}
+.bl{font:600 12px var(--font-cond);letter-spacing:.07em;text-transform:uppercase;color:var(--ink2)}
+.chips{display:flex;gap:4px}
+.chip{font:600 12px/1 var(--font-mono);padding:6px 8px;border-radius:6px;border:1px solid var(--base);background:var(--surface);color:var(--ink);cursor:pointer}
+.chip:hover{border-color:var(--ink2)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--page);border-color:var(--ink)}
+.chip.clr{font-family:var(--font-ui);font-weight:500}
+.status{flex:1 1 360px;font-size:14px;color:var(--ink2);min-width:0}
+.status b{color:var(--ink);font-weight:600}
+.pin{font:600 11px/1 var(--font-cond);letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--ink2);border-radius:4px;padding:2px 5px;margin-left:6px;color:var(--ink)}
+
+.phase{margin:34px 0 0}
+.phase>h2{font-size:22px;font-weight:600;margin:0;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.phase .pr{font:500 13px var(--font-cond);letter-spacing:.05em;text-transform:uppercase;color:var(--ink3)}
+.phase>p{margin:3px 0 0;color:var(--ink2);max-width:920px}
+.kb{scroll-margin-top:64px}
+.launch{display:flex;align-items:center;gap:10px;margin:24px 0 12px}
+.launch .lp{font:600 12px/1 var(--font-mono);color:var(--page);background:var(--ink);border-radius:999px;padding:6px 10px;white-space:nowrap}
+.launch.opt .lp{background:transparent;color:var(--ink);border:1.5px dashed var(--ink);padding:5px 9px}
+.launch .ln{font:600 15px var(--font-mono);white-space:nowrap}
+.launch .lt{font:500 12px var(--font-cond);letter-spacing:.05em;text-transform:uppercase;color:var(--ink2);white-space:nowrap}
+.launch .lr{flex:1;min-width:30px;border-top:2px dashed var(--ink3)}
+
+.band{display:grid;grid-template-columns:minmax(0,1.45fr) 40px 316px 40px minmax(0,.75fr);align-items:center}
+.side{display:flex;flex-wrap:wrap;gap:14px 18px;align-items:flex-start;align-content:center}
+.side.in{justify-content:flex-end}
+.side.out{justify-content:flex-start}
+.cap{flex:0 0 100%;font:600 11px/1 var(--font-cond);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+.side.in .cap{text-align:right}
+.arr{position:relative;height:0;border-top:1.5px solid var(--ink3);margin:0 8px 0 6px}
+.arr::after{content:"";position:absolute;right:-3px;top:-6px;border-left:9px solid var(--ink3);border-top:5.25px solid transparent;border-bottom:5.25px solid transparent}
+.op{background:var(--surface);border:1.5px solid var(--ink);border-radius:10px;padding:11px 13px}
+.op .on{font:600 15px var(--font-mono)}
+.op .tag{font:500 12px var(--font-cond);letter-spacing:.05em;text-transform:uppercase;color:var(--ink2);margin-left:6px}
+.op .f{font:13px/1.45 var(--font-mono);margin:7px 0 3px;white-space:pre-wrap}
+.op .sh{font:12px/1.4 var(--font-mono);color:var(--ink2);white-space:pre-wrap}
+.op .par{font-size:13px;line-height:1.4;color:var(--ink2);margin-top:8px;padding-top:8px;border-top:1px solid var(--hair)}
+.sig{margin:12px 0 0;padding:9px 12px;background:var(--code-bg);border-radius:8px;font:12.5px/1.55 var(--font-mono);white-space:pre-wrap;word-break:break-word;overflow-x:auto}
+.sig .kw{color:var(--ink2)}.sig .cm{color:var(--ink3)}
+
+.tc{background:var(--surface);border:1px solid var(--hair);border-radius:10px;padding:8px 10px 8px}
+.tc.is-output{border:2px solid var(--ink)}
+.tch{display:flex;align-items:center;gap:7px}
+.tn{font:600 13.5px var(--font-mono)}
+.dim{font:600 10.5px/1 var(--font-cond);letter-spacing:.05em;color:var(--ink2);border:1px solid var(--base);border-radius:4px;padding:2px 4px}
+.tm{font:11.5px var(--font-mono);color:var(--ink2);margin:2px 0 8px;white-space:nowrap}
+.tf{font-size:12px;color:var(--ink3);margin-top:7px;white-space:nowrap}
+
+.tb{display:flex;align-items:flex-start;gap:3px}
+.lcol{display:flex;flex-direction:column;padding-top:3px}
+.lcol.wh{padding-top:calc(var(--cell) + 6px)}
+.segs{display:flex;flex-direction:column;gap:var(--seg)}
+.seg{display:flex;flex-direction:column;gap:var(--gap)}
+.rl{height:var(--cell);font:10px/var(--cell) var(--font-mono);color:var(--ink2);text-align:right;white-space:nowrap;padding-right:2px;cursor:default}
+.rl .ri{color:var(--ink3);margin-right:5px}
+.sl{display:flex;align-items:center;justify-content:flex-end;font:600 10.5px var(--font-mono);color:var(--ink);border-right:1.5px solid var(--ink3);padding-right:4px;margin-right:2px;white-space:nowrap;cursor:default}
+.mcol{display:flex;flex-direction:column}
+.ch{display:flex;gap:var(--gap);height:var(--cell);margin-bottom:3px;padding-left:var(--bpad)}
+.ch span{flex:0 0 auto;width:var(--cell);font:9.5px/var(--cell) var(--font-mono);color:var(--ink2);text-align:center;white-space:nowrap;cursor:default}
+.ch span.cg{font-weight:600;line-height:12px;border-bottom:1.5px solid var(--base)}
+.mat{position:relative;padding:3px var(--bpad)}
+.mat::before,.mat::after{content:"";position:absolute;top:0;bottom:0;width:4px;border:1.5px solid var(--ink2)}
+.mat::before{left:0;border-right:0}.mat::after{right:0;border-left:0}
+.row{display:flex;gap:var(--gap)}
+.cell{flex:0 0 auto;width:var(--cell);height:var(--cell);border-radius:2px;transition:opacity .12s,box-shadow .12s}
+.cell.in{background:var(--c-in)}.cell.param{background:var(--c-param)}.cell.act{background:var(--c-act)}
+.cell.meta{background:var(--c-meta);color:var(--on-meta);font:600 9px/var(--cell) var(--font-mono);text-align:center;letter-spacing:-.04em}
+.cell.q1{background:var(--q1)}.cell.q2{background:var(--q2)}.cell.q3{background:var(--q3)}.cell.q4{background:var(--q4)}
+.cell.q5{background:var(--q5)}.cell.q6{background:var(--q6)}.cell.q7{background:var(--q7)}.cell.q8{background:var(--q8)}
+.cell.q9{background:var(--q9)}.cell.q10{background:var(--q10)}.cell.q11{background:var(--q11)}
+.cell.sp,.ch span.sp{margin-left:var(--split)}
+.cell.top{box-shadow:inset 0 0 0 2px var(--ink)}
+.v1{display:inline-flex;flex-direction:column;align-items:flex-start}
+.strip{display:flex;gap:var(--seg);padding:3px;border:1.5px solid var(--ink2);border-radius:7px}
+.grp{display:flex;gap:var(--gap)}
+.ix,.sx{display:flex;gap:var(--seg);padding:0 4.5px}
+.ix{margin-bottom:2px}
+.ix span{flex:0 0 auto;width:var(--cell);font:9.5px/1.2 var(--font-mono);color:var(--ink3);text-align:center;white-space:nowrap;cursor:default}
+.sx{margin-top:3px}
+.sx span{font:600 10.5px/1.3 var(--font-mono);text-align:center;border-top:1.5px solid var(--ink3);padding-top:1px;cursor:default}
+.vol{display:grid;grid-template-columns:repeat(2,max-content);gap:10px 14px;padding:8px 10px 10px;border:1.5px dashed var(--ink3);border-radius:9px}
+.sliceh{font:600 10.5px var(--font-mono);color:var(--ink2);margin:0 0 3px 2px;cursor:default}
+
+body.tracing .cell{opacity:.14}
+body.tracing .cell.hl{opacity:1;box-shadow:0 0 0 1.5px var(--ink)}
+body.tracing .cell.top.hl{box-shadow:inset 0 0 0 2px var(--ink),0 0 0 1.5px var(--ink)}
+
+.inv-wrap{margin-top:44px}
+.inv-wrap h2,.notes h2{font-size:22px;font-weight:600;margin:0 0 10px}
+.tw{overflow-x:auto;border:1px solid var(--hair);border-radius:10px;background:var(--surface)}
+table.inv{border-collapse:collapse;width:100%;font-size:14px}
+.inv th{font:600 12px/1.2 var(--font-cond);letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);text-align:left;padding:9px 10px;border-bottom:1px solid var(--base);white-space:nowrap}
+.inv td{padding:7px 10px;border-bottom:1px solid var(--hair);vertical-align:top}
+.inv tr:last-child td{border-bottom:0}
+.inv td.mono{font:13px var(--font-mono);white-space:nowrap}
+.inv .k{display:flex;align-items:center;gap:7px;white-space:nowrap}
+.inv .k .sw{margin-top:0}
+.notes{margin-top:40px}
+.notes ol{margin:0;padding-left:22px;max-width:1040px}
+.notes li{margin:0 0 9px}
+footer{margin:36px auto 48px;color:var(--ink2);font-size:13.5px}
+footer p{max-width:1040px;margin:0 0 8px}
+
+@media (max-width:1000px){
+  .band{grid-template-columns:1fr}
+  .side.in,.side.out{justify-content:flex-start}
+  .side.in .cap{text-align:left}
+  .arr{height:26px;width:0;border-top:0;border-left:1.5px solid var(--ink3);margin:8px 0 8px 40px}
+  .arr::after{right:auto;top:auto;left:-6px;bottom:-3px;border-left:5.25px solid transparent;border-right:5.25px solid transparent;border-top:9px solid var(--ink3);border-bottom:0}
+}
+</style>
+</head>
+<body>
+<header class="wrap">
+  <h1>MoE layer forward pass, split at every kernel launch <span class="nf">assumes no fusion</span></h1>
+  <p class="lede">Every tensor one MoE layer touches in a forward pass, and the interface of every kernel that reads or writes it. One square is one element, drawn to scale with toy sizes: T&nbsp;=&nbsp;6 tokens, hidden size H&nbsp;=&nbsp;8, E&nbsp;=&nbsp;4 experts, top-k&nbsp;=&nbsp;2, expert width I&nbsp;=&nbsp;5. For scale, DeepSeek-V3 uses H&nbsp;=&nbsp;7168, E&nbsp;=&nbsp;256, k&nbsp;=&nbsp;8, I&nbsp;=&nbsp;2048. Fusion is ignored on purpose: each logical step is its own launch, so every dashed line below is a round trip through HBM.</p>
+  <div class="legend">
+    <section class="lg"><h2>Color is what the data is</h2>
+      <ul>
+        <li><span class="sw in"></span><div>Input<small>X, the token hidden states entering the layer</small></div></li>
+        <li><span class="sw param"></span><div>Parameters<small>fixed weights loaded with the model: router and experts</small></div></li>
+        <li><span class="sw act"></span><div>Data flow, float<small>activations made at run time; where the value matters, darker means larger</small></div></li>
+        <li><span class="sw meta">3</span><div>Data flow, int32<small>routing metadata made at run time; the digit is the stored value</small></div></li>
+      </ul></section>
+    <section class="lg"><h2>Shape is how many dimensions</h2>
+      <ul>
+        <li><span class="mini strip"><span class="sw act"></span><span class="sw act"></span><span class="sw act"></span><span class="sw act"></span></span><div>1-D: one row in a rounded strip</div></li>
+        <li><span class="mini m2"><span class="r"><span class="sw act"></span><span class="sw act"></span><span class="sw act"></span></span><span class="r"><span class="sw act"></span><span class="sw act"></span><span class="sw act"></span></span></span><div>2-D: a grid in brackets, rows top to bottom</div></li>
+        <li><span class="mini m3"><span class="mini m2"><span class="r"><span class="sw param"></span><span class="sw param"></span></span><span class="r"><span class="sw param"></span><span class="sw param"></span></span></span><span class="mini m2"><span class="r"><span class="sw param"></span><span class="sw param"></span></span><span class="r"><span class="sw param"></span><span class="sw param"></span></span></span></span><div>3-D: its 2-D slices in a dashed box (one slice per expert)</div></li>
+        <li><span class="dash"></span><div>Gaps inside a buffer split it into per-expert segments</div></li>
+      </ul></section>
+    <section class="lg"><h2>Reading a launch</h2>
+      <ul>
+        <li><span class="dash"></span><div>Kernel launch boundary<small>outputs above the line are written to HBM; the next kernel reads them back</small></div></li>
+        <li><div>Each launch shows what it reads, the kernel, what it writes, and a C-style signature. Footers say which launch wrote an input and which launches read an output.</div></li>
+        <li><div>Hover any square to trace its token, or a weight slice to trace its expert. Click to pin; Esc clears.</div></li>
+      </ul></section>
+  </div>
+  <nav class="tl" id="tl" aria-label="Kernel launches"></nav>
+</header>
+
+<div class="bar"><div class="bar-in">
+  <span class="bl">Trace</span>
+  <span class="chips" id="chipsT"></span>
+  <span class="chips" id="chipsE"></span>
+  <button class="chip clr" id="clear" type="button">Clear</button>
+  <span class="status" id="status"></span>
+</div></div>
+
+<main class="wrap" id="flow"></main>
+
+<section class="wrap inv-wrap">
+  <h2>Every tensor in one table</h2>
+  <div class="tw"><table class="inv" id="inv">
+    <thead><tr><th>Tensor</th><th>Kind</th><th>Shape</th><th>Here</th><th>dtype</th><th>Written by</th><th>Read by</th><th>Holds</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+</section>
+
+<section class="wrap notes">
+  <h2>What real implementations change (not drawn)</h2>
+  <ol>
+    <li><b>Fusion.</b> Production kernels merge most of these launches. In vLLM's Triton path (2025), softmax and top-k (launches 2–3) are one <code>topk_softmax</code> kernel, and launches 5–7 collapse into <code>moe_align_block_size</code>. The permuted buffers are never written: both grouped GEMMs read and write rows in (token, slot) order and use the sorted index list only to decide which rows each tile works on. GEMM 2 also multiplies by the routing weight, and a small <code>moe_sum</code> adds the k slots.</li>
+    <li><b>Padding and a tile-to-expert table.</b> Grouped GEMM kernels want each expert's segment padded to a multiple of the tile height, plus an expert id per tile or per row, so a CTA knows which weight slice to load without searching <code>expert_offsets</code> (vLLM's <code>expert_ids</code>, DeepGEMM's contiguous layout).</li>
+    <li><b>Decode under CUDA graphs.</b> The CPU does not know <code>tokens_per_expert</code> in advance, so masked layouts use a fixed [E, max_m, H] buffer plus a count of valid rows per expert (DeepGEMM's masked layout).</li>
+    <li><b>Expert parallelism across GPUs.</b> Experts live on different GPUs. Launch 8 becomes a dispatch and launch 12 a combine: all-to-all exchanges between GPUs, which libraries such as DeepEP implement.</li>
+    <li><b>Shared experts.</b> DeepSeek-V2/V3 and Qwen2-MoE add a dense FFN that every token goes through; its output is added to Y.</li>
+    <li><b>Router variants.</b> DeepSeek-V3 scores experts with a sigmoid, adds a per-expert bias only when choosing them (auxiliary-loss-free load balancing), limits each token to the best expert groups, then normalizes the chosen scores and scales them by <code>routed_scaling_factor</code>.</li>
+    <li><b>Low precision.</b> With FP8, every GEMM interface gains scale tensors; DeepSeek-V3 keeps one scale per 1×128 activation tile and one per 128×128 weight block.</li>
+    <li><b>The other extreme.</b> In 2026 DeepGEMM added a fused Mega MoE kernel that overlaps NVLink communication with the expert computation.</li>
+  </ol>
+</section>
+
+<footer class="wrap">
+  <p>Scope: one MoE layer, forward pass, one GPU. dtypes are typical for BF16 inference (<code>bf16</code> stands for <code>__nv_bfloat16</code>); many implementations keep router math in FP32. Weights are drawn as [in, out] so the math reads X · W; checkpoints usually store the <code>nn.Linear</code> layout [out, in], and kernels read it transposed.</p>
+  <p>Illustrative, not measured: the routing probabilities are made up. Rows inside an expert are drawn in token order, which a stable ranking in launch 7 produces; ranking with <code>atomicAdd</code> gives some other order and the same final Y. Launch 5 also needs <code>tokens_per_expert</code> zeroed first, a memset that is not drawn.</p>
+  <p>Sources: A. Q. Jiang et al., “Mixtral of Experts”, arXiv:2401.04088 (2024); DeepSeek-AI, “DeepSeek-V3 Technical Report”, arXiv:2412.19437 (2024); vLLM documentation for <code>fused_moe</code> and <code>moe_align_block_size</code>; the deepseek-ai/DeepGEMM and deepseek-ai/DeepEP READMEs.</p>
+</footer>
+
+<script>
+(function(){
+'use strict';
+
+/* ---------- toy problem ---------- */
+var T=6,H=8,E=4,K=2,I=5,TK=T*K;
+var CELL=14,GAP=2;
+/* experts chosen by each token, best first, and their softmax probabilities */
+var ROUTE=[[1,0],[2,3],[3,1],[0,3],[3,2],[1,2]];
+var PTOP=[[.46,.31],[.41,.29],[.52,.21],[.38,.34],[.44,.27],[.49,.30]];
+
+function r2(v){return Math.round(v*100)/100;}
+function range(n){var a=[];for(var i=0;i<n;i++)a.push(i);return a;}
+function f2(v){return v.toFixed(2);}
+
+var probs=[],logits=[],wRaw=[],wNorm=[];
+ROUTE.forEach(function(rt,t){
+  var p=range(E).map(function(){return 0;});
+  p[rt[0]]=PTOP[t][0];p[rt[1]]=PTOP[t][1];
+  var rest=1-PTOP[t][0]-PTOP[t][1];
+  var oth=range(E).filter(function(e){return rt.indexOf(e)<0;});
+  p[oth[0]]=r2(rest*0.6);p[oth[1]]=r2(rest-p[oth[0]]);
+  probs.push(p);
+  logits.push(p.map(function(v){return Math.log(v)+2;}));
+  wRaw.push(PTOP[t].slice());
+  var s=PTOP[t][0]+PTOP[t][1];
+  wNorm.push(PTOP[t].map(function(v){return v/s;}));
+});
+
+/* histogram, exclusive scan, stable permutation */
+var counts=range(E).map(function(){return 0;});
+ROUTE.forEach(function(rt){rt.forEach(function(e){counts[e]++;});});
+var offsets=[0];
+for(var e0=0;e0<E;e0++)offsets.push(offsets[e0]+counts[e0]);
+var cursor=offsets.slice(0,E),dst=[],src=[],slotOf=[],expOf=[];
+for(var t0=0;t0<T;t0++){
+  dst.push([]);
+  for(var j0=0;j0<K;j0++){
+    var ee=ROUTE[t0][j0],rr=cursor[ee]++;
+    dst[t0].push(rr);src[rr]=t0;slotOf[rr]=j0;expOf[rr]=ee;
+  }
+}
+var SEGS=range(E).map(function(e){return {from:offsets[e],to:offsets[e+1],e:e};});
+function tokensOf(e){return range(T).filter(function(t){return ROUTE[t].indexOf(e)>=0;});}
+var LMIN=Infinity,LMAX=-Infinity;
+logits.forEach(function(r){r.forEach(function(v){LMIN=Math.min(LMIN,v);LMAX=Math.max(LMAX,v);});});
+function qz(v,lo,hi){return 'q'+(1+Math.max(0,Math.min(10,Math.round((v-lo)/(hi-lo)*10))));}
+
+/* ---------- drawing primitives ---------- */
+var CELLS=[];
+function el(tag,cls,txt){var x=document.createElement(tag);if(cls)x.className=cls;if(txt!=null)x.textContent=txt;return x;}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function cell(kind,o){
+  var d=el('div','cell '+kind+(o.q?' '+o.q:'')+(o.top?' top':'')+(o.sp?' sp':''));
+  if(o.v!=null)d.textContent=o.v;
+  if(o.tip)d.title=o.tip;
+  d._t=(o.t==null)?null:o.t;d._e=(o.e==null)?null:o.e;d._all=!!o.all;
+  CELLS.push(d);
+  return d;
+}
+function lab(cls,txt,t,e,tip){
+  var d=el('span',cls+' lab',txt);
+  d._t=(t==null)?null:t;d._e=(e==null)?null:e;
+  if(tip)d.title=tip;
+  return d;
+}
+function span(n){return n*CELL+(n-1)*GAP;}
+
+/* 2-D grid. o: rows, cols, kind, at(r,c), rowLab(r), colLab[], colGroups[], segments[], split */
+function mat2D(o){
+  var tb=el('div','tb');
+  var segList=o.segments||[{from:0,to:o.rows}];
+  var hasHead=!!(o.colLab||o.colGroups);
+  if(o.segments){
+    var c1=el('div','lcol'+(hasHead?' wh':'')),s1=el('div','segs');
+    segList.forEach(function(g){
+      var n=g.to-g.from,d=el('div','sl lab','E'+g.e);
+      d._t=null;d._e=g.e;d.style.height=span(n)+'px';
+      d.title='expert '+g.e+': rows '+g.from+'–'+(g.to-1)+', M = '+n;
+      s1.appendChild(d);
+    });
+    c1.appendChild(s1);tb.appendChild(c1);
+  }
+  if(o.rowLab){
+    var c2=el('div','lcol'+(hasHead?' wh':'')),s2=el('div','segs');
+    segList.forEach(function(g){
+      var sg=el('div','seg');
+      for(var r=g.from;r<g.to;r++){
+        var L=o.rowLab(r),d=el('div','rl lab');
+        d.innerHTML=L.html;d._t=(L.t==null)?null:L.t;d._e=(L.e==null)?null:L.e;
+        sg.appendChild(d);
+      }
+      s2.appendChild(sg);
+    });
+    c2.appendChild(s2);tb.appendChild(c2);
+  }
+  var m=el('div','mcol');
+  if(o.colGroups){
+    var h=el('div','ch');
+    o.colGroups.forEach(function(g,i){
+      var sp=el('span','cg'+(i>0&&o.split!=null?' sp':''),g.txt);
+      sp.style.width=span(g.n)+'px';h.appendChild(sp);
+    });
+    m.appendChild(h);
+  }else if(o.colLab){
+    var h2=el('div','ch');
+    o.colLab.forEach(function(L,c){
+      var sp=lab((o.split!=null&&c===o.split)?'sp':'',L.txt,null,L.e,L.tip);
+      h2.appendChild(sp);
+    });
+    m.appendChild(h2);
+  }
+  var box=el('div','mat'),s3=el('div','segs');
+  segList.forEach(function(g){
+    var sg=el('div','seg');
+    for(var r=g.from;r<g.to;r++){
+      var row=el('div','row');
+      for(var c=0;c<o.cols;c++){
+        var co=o.at(r,c);
+        if(o.split!=null&&c===o.split)co.sp=true;
+        row.appendChild(cell(o.kind,co));
+      }
+      sg.appendChild(row);
+    }
+    s3.appendChild(sg);
+  });
+  box.appendChild(s3);m.appendChild(box);tb.appendChild(m);
+  return tb;
+}
+/* 1-D strip. o: n, kind, at(i), idx(i), segments[] */
+function vec1D(o){
+  var w=el('div','v1'),groups=o.segments||[{from:0,to:o.n}];
+  if(o.idx){
+    var ix=el('div','ix');
+    groups.forEach(function(g){
+      var gg=el('div','grp');
+      for(var i=g.from;i<g.to;i++){var L=o.idx(i);gg.appendChild(lab('',L.txt,L.t,L.e,L.tip));}
+      ix.appendChild(gg);
+    });
+    w.appendChild(ix);
+  }
+  var st=el('div','strip');
+  groups.forEach(function(g){
+    var gg=el('div','grp');
+    for(var i=g.from;i<g.to;i++)gg.appendChild(cell(o.kind,o.at(i)));
+    st.appendChild(gg);
+  });
+  w.appendChild(st);
+  if(o.segments){
+    var sx=el('div','sx');
+    groups.forEach(function(g){
+      var sp=lab('','E'+g.e,null,g.e,'expert '+g.e);
+      sp.style.width=span(g.to-g.from)+'px';sx.appendChild(sp);
+    });
+    w.appendChild(sx);
+  }
+  return w;
+}
+/* 3-D: d0 slices of [d1, d2] */
+function vol3D(o){
+  var v=el('div','vol');
+  for(var s=0;s<o.d0;s++){
+    (function(s){
+      var sl=el('div','slice');
+      var h=lab('sliceh',o.name+'['+s+']',null,s,'expert '+s+': a ['+o.d1+', '+o.d2+'] slice');
+      h.style.display='block';sl.appendChild(h);
+      sl.appendChild(mat2D({rows:o.d1,cols:o.d2,kind:o.kind,split:o.split,colGroups:o.colGroups,
+        at:function(r,c){return o.at(s,r,c);}}));
+      v.appendChild(sl);
+    })(s);
+  }
+  return v;
+}
+function tokRow(r){return {html:'t'+r,t:r};}
+function slotCols(){return [{txt:'j0',tip:'slot 0: best expert'},{txt:'j1',tip:'slot 1: second best'}];}
+function expCols(){return range(E).map(function(e){return {txt:'E'+e,e:e,tip:'expert '+e};});}
+function permMat(cols,name,extra){
+  var o={rows:TK,cols:cols,kind:'act',segments:SEGS,
+    at:function(r,c){return {t:src[r],e:expOf[r],tip:name+'['+r+', '+c+']: token '+src[r]+', slot '+slotOf[r]+', expert '+expOf[r]};},
+    rowLab:function(r){return {html:'<span class="ri">'+r+'</span>t'+src[r],t:src[r],e:expOf[r]};}};
+  for(var k in (extra||{}))o[k]=extra[k];
+  return mat2D(o);
+}
+var GU_GROUPS=[{n:I,txt:'gate'},{n:I,txt:'up'}];
+
+/* ---------- tensors ---------- */
+var TENSORS={
+  X:{kind:'in',sym:'[T, H]',dims:[T,H],dtype:'bf16',holds:'hidden state of each token entering the layer',
+    draw:function(){return mat2D({rows:T,cols:H,kind:'in',rowLab:tokRow,
+      at:function(r,c){return {t:r,tip:'X['+r+', '+c+']'};}});}},
+  W_r:{kind:'param',sym:'[H, E]',dims:[H,E],dtype:'bf16',holds:'router weight; column e is the scoring vector of expert e',
+    draw:function(){return mat2D({rows:H,cols:E,kind:'param',colLab:expCols(),
+      at:function(r,c){return {e:c,all:true,tip:'W_r['+r+', '+c+']: column '+c+' scores expert '+c};}});}},
+  logits:{kind:'act',sym:'[T, E]',dims:[T,E],dtype:'fp32',holds:'router score of every expert for every token',
+    draw:function(){return mat2D({rows:T,cols:E,kind:'act',rowLab:tokRow,colLab:expCols(),
+      at:function(r,c){return {t:r,e:c,q:qz(logits[r][c],LMIN,LMAX),tip:'logits['+r+', '+c+'] = '+f2(logits[r][c])};}});}},
+  probs:{kind:'act',sym:'[T, E]',dims:[T,E],dtype:'fp32',holds:'softmax of each logits row over the E experts',
+    draw:function(v){return mat2D({rows:T,cols:E,kind:'act',rowLab:tokRow,colLab:expCols(),
+      at:function(r,c){return {t:r,e:c,q:qz(probs[r][c],0,.75),top:!!(v&&v.markTop)&&ROUTE[r].indexOf(c)>=0,
+        tip:'probs['+r+', '+c+'] = '+f2(probs[r][c])+(ROUTE[r].indexOf(c)>=0?' (kept by top-k)':'')};}});}},
+  topk_w:{kind:'act',sym:'[T, k]',dims:[T,K],dtype:'fp32',holds:'weights of the k chosen experts; launch 4 renormalizes them in place',
+    draw:function(v){var W=(v&&v.norm)?wNorm:wRaw;return mat2D({rows:T,cols:K,kind:'act',rowLab:tokRow,colLab:slotCols(),
+      at:function(r,c){return {t:r,e:ROUTE[r][c],q:qz(W[r][c],0,.75),tip:'topk_w['+r+', '+c+'] = '+f2(W[r][c])+' (expert '+ROUTE[r][c]+')'};}});}},
+  topk_ids:{kind:'meta',sym:'[T, k]',dims:[T,K],dtype:'int32',holds:'ids of the k chosen experts, best first',
+    draw:function(){return mat2D({rows:T,cols:K,kind:'meta',rowLab:tokRow,colLab:slotCols(),
+      at:function(r,c){return {t:r,e:ROUTE[r][c],v:ROUTE[r][c],tip:'topk_ids['+r+', '+c+'] = '+ROUTE[r][c]};}});}},
+  tokens_per_expert:{kind:'meta',sym:'[E]',dims:[E],dtype:'int32',holds:'number of (token, slot) pairs per expert = the M of its GEMMs',
+    draw:function(){return vec1D({n:E,kind:'meta',
+      idx:function(i){return {txt:'E'+i,e:i,tip:'expert '+i};},
+      at:function(i){return {e:i,v:counts[i],tip:'tokens_per_expert['+i+'] = '+counts[i]};}});}},
+  expert_offsets:{kind:'meta',sym:'[E + 1]',dims:[E+1],dtype:'int32',holds:'first row of each expert segment in the permuted buffers; the last entry is T·k',
+    draw:function(){return vec1D({n:E+1,kind:'meta',
+      idx:function(i){return i<E?{txt:'E'+i,e:i,tip:'expert '+i}:{txt:'end',tip:'end = T·k'};},
+      at:function(i){return {e:i<E?i:null,v:offsets[i],
+        tip:i<E?'expert_offsets['+i+'] = '+offsets[i]+': expert '+i+' starts at row '+offsets[i]:'expert_offsets['+E+'] = '+offsets[E]+' = T·k'};}});}},
+  dst_row:{kind:'meta',sym:'[T, k]',dims:[T,K],dtype:'int32',holds:'for each (token, slot), its row in the permuted buffers',
+    draw:function(){return mat2D({rows:T,cols:K,kind:'meta',rowLab:tokRow,colLab:slotCols(),
+      at:function(r,c){return {t:r,e:ROUTE[r][c],v:dst[r][c],tip:'dst_row['+r+', '+c+'] = '+dst[r][c]+': (t'+r+', slot '+c+') goes to permuted row '+dst[r][c]};}});}},
+  perm_src:{kind:'meta',sym:'[T·k]',dims:[TK],dtype:'int32',holds:'for each permuted row, the token it copies (the inverse of dst_row)',
+    draw:function(){return vec1D({n:TK,kind:'meta',segments:SEGS,
+      idx:function(i){return {txt:String(i),tip:'permuted row '+i};},
+      at:function(i){return {t:src[i],e:expOf[i],v:src[i],tip:'perm_src['+i+'] = '+src[i]+': permuted row '+i+' copies token '+src[i]};}});}},
+  X_perm:{kind:'act',sym:'[T·k, H]',dims:[TK,H],dtype:'bf16',holds:'token rows copied into expert order; each token appears k times',
+    draw:function(){return permMat(H,'X_perm');}},
+  W_gate_up:{kind:'param',sym:'[E, H, 2I]',dims:[E,H,2*I],dtype:'bf16',holds:'per-expert gate and up projections, side by side along N',
+    draw:function(){return vol3D({name:'W_gate_up',d0:E,d1:H,d2:2*I,kind:'param',split:I,colGroups:GU_GROUPS,
+      at:function(s,r,c){return {e:s,tip:'W_gate_up['+s+', '+r+', '+c+'] ('+(c<I?'gate':'up')+')'};}});}},
+  gate_up:{kind:'act',sym:'[T·k, 2I]',dims:[TK,2*I],dtype:'bf16',holds:'GEMM 1 output: I gate columns, then I up columns',
+    draw:function(){return permMat(2*I,'gate_up',{split:I,colGroups:GU_GROUPS});}},
+  act:{kind:'act',sym:'[T·k, I]',dims:[TK,I],dtype:'bf16',holds:'SwiGLU output, silu(gate) × up',
+    draw:function(){return permMat(I,'act');}},
+  W_down:{kind:'param',sym:'[E, I, H]',dims:[E,I,H],dtype:'bf16',holds:'per-expert down projection',
+    draw:function(){return vol3D({name:'W_down',d0:E,d1:I,d2:H,kind:'param',
+      at:function(s,r,c){return {e:s,tip:'W_down['+s+', '+r+', '+c+']'};}});}},
+  Y_perm:{kind:'act',sym:'[T·k, H]',dims:[TK,H],dtype:'bf16',holds:'expert outputs, still in expert order',
+    draw:function(){return permMat(H,'Y_perm');}},
+  Y:{kind:'act',sym:'[T, H]',dims:[T,H],dtype:'bf16',output:true,holds:'layer output: each token’s k expert outputs, weighted and summed',
+    draw:function(){return mat2D({rows:T,cols:H,kind:'act',rowLab:tokRow,
+      at:function(r,c){return {t:r,tip:'Y['+r+', '+c+']'};}});}}
+};
+
+/* ---------- kernels, one per launch ---------- */
+var PHASES=[
+  {n:1,num:'①',title:'Routing',range:'launches 1–4',desc:'Score all E experts for every token, then keep the best k and their weights.'},
+  {n:2,num:'②',title:'Permute',range:'launches 5–8',desc:'Count, scan, rank, copy: reorder the T·k (token, slot) pairs so that each expert’s rows sit together.'},
+  {n:3,num:'③',title:'Expert FFNs',range:'launches 9–11',desc:'Every expert runs GEMM → SwiGLU → GEMM on its own rows: E GEMMs of different heights in each launch.'},
+  {n:4,num:'④',title:'Unpermute and combine',range:'launch 12',desc:'Put rows back in token order and add each token’s k expert outputs, weighted by the router.'}
+];
+var KERNELS=[
+  {id:1,ph:1,name:'router_gemm',ins:['X','W_r'],outs:['logits'],
+    f:'logits = X · W_r',sh:'[T, H] · [H, E] → [T, E]',
+    par:'An ordinary GEMM with M = T, N = E, K = H. N is tiny (4 here, 256 in DeepSeek-V3), so it is a skinny GEMM.',
+    args:[{t:'const bf16*',n:'X',c:'[T, H]'},{t:'const bf16*',n:'W_r',c:'[H, E]'},{t:'float*',n:'logits',c:'[T, E]  out'},{raw:'int T, int H, int E'}]},
+  {id:2,ph:1,name:'softmax_rows',ins:['logits'],outs:['probs'],
+    f:'probs[t, :] = softmax(logits[t, :])',sh:'one row per token, over E experts',
+    par:'One warp per token: a max-reduce, then a sum of exp(x − max).',
+    args:[{t:'const float*',n:'logits',c:'[T, E]'},{t:'float*',n:'probs',c:'[T, E]  out'},{raw:'int T, int E'}]},
+  {id:3,ph:1,name:'topk_rows',ins:['probs'],outs:['topk_w','topk_ids'],inOpt:{probs:{markTop:true}},
+    f:'topk_w, topk_ids =\n  top-k(probs[t, :])',sh:'keep k of E per row, best first',
+    par:'One warp per token; for small k, run k rounds of warp argmax. Ringed cells are the ones kept.',
+    args:[{t:'const float*',n:'probs',c:'[T, E]'},{t:'float*',n:'topk_w',c:'[T, k]  out'},{t:'int*',n:'topk_ids',c:'[T, k]  out, best expert first'},{raw:'int T, int E, int k'}]},
+  {id:4,ph:1,name:'renormalize',optional:true,ins:['topk_w'],outs:['topk_w'],outOpt:{topk_w:{norm:true,label:'topk_w (in place)'}},
+    f:'topk_w[t, :] /= sum(topk_w[t, :])',sh:'per row, in place',
+    par:'One thread per token. Mixtral always does this; Qwen makes it a config flag (norm_topk_prob).',
+    args:[{t:'float*',n:'topk_w',c:'[T, k]  read and overwritten'},{raw:'int T, int k'}]},
+  {id:5,ph:2,name:'expert_histogram',ins:['topk_ids'],outs:['tokens_per_expert'],
+    f:'tokens_per_expert[e] =\n  #{ (t, j) : topk_ids[t, j] = e }',sh:'T·k ids → E counts',
+    par:'One thread per (t, j) doing atomicAdd(&tokens_per_expert[e], 1). With many tokens, count in shared memory first.',
+    args:[{t:'const int*',n:'topk_ids',c:'[T, k]'},{t:'int*',n:'tokens_per_expert',c:'[E]  out, zeroed before launch'},{raw:'int T, int k, int E'}]},
+  {id:6,ph:2,name:'exclusive_scan',ins:['tokens_per_expert'],outs:['expert_offsets'],
+    f:'expert_offsets[e] =\n  sum(tokens_per_expert[0 .. e−1])',sh:'E counts → E + 1 offsets, last = T·k',
+    par:'Tiny: one warp scans E ≤ 32 values; one block handles E = 256.',
+    args:[{t:'const int*',n:'tokens_per_expert',c:'[E]'},{t:'int*',n:'expert_offsets',c:'[E + 1]  out'},{raw:'int E'}]},
+  {id:7,ph:2,name:'build_permutation',ins:['topk_ids','expert_offsets'],outs:['dst_row','perm_src'],
+    f:'r = expert_offsets[e] + rank\ndst_row[t, j] = r\nperm_src[r]   = t',sh:'rank = place of (t, j) among\nthe pairs routed to expert e',
+    par:'One thread per (t, j). The rank comes from atomicAdd on a per-expert cursor (order inside an expert is then arbitrary) or from a stable sort, which gives the token order drawn here.',
+    args:[{t:'const int*',n:'topk_ids',c:'[T, k]'},{t:'const int*',n:'expert_offsets',c:'[E + 1]'},{t:'int*',n:'dst_row',c:'[T, k]  out'},{t:'int*',n:'perm_src',c:'[T·k]  out'},{raw:'int T, int k, int E'}]},
+  {id:8,ph:2,name:'permute_rows',ins:['X','perm_src'],outs:['X_perm'],
+    f:'X_perm[r, :] = X[perm_src[r], :]',sh:'gather T·k rows of length H',
+    par:'One block (or warp) per output row, copying H elements with 16-byte vector loads. Each token row is copied k times.',
+    args:[{t:'const bf16*',n:'X',c:'[T, H]'},{t:'const int*',n:'perm_src',c:'[T·k]'},{t:'bf16*',n:'X_perm',c:'[T·k, H]  out'},{raw:'int T, int k, int H'}]},
+  {id:9,ph:3,name:'grouped_gemm',tag:'gate and up',ins:['X_perm','W_gate_up','expert_offsets'],outs:['gate_up'],
+    f:'gate_up[rows of e] =\n  X_perm[rows of e] · W_gate_up[e]',sh:'E GEMMs; expert e has\nM = tokens_per_expert[e], N = 2I, K = H',
+    par:'Grid over (expert, M tile, N tile). Each CTA reads expert_offsets to find its rows and weight slice, and exits early if its tile is empty. M differs per expert and is only known on the GPU.',
+    args:[{t:'const bf16*',n:'A',c:'X_perm      [T·k, H]'},{t:'const bf16*',n:'B',c:'W_gate_up   [E, H, 2I]'},{t:'const int*',n:'expert_offsets',c:'[E + 1]'},{t:'bf16*',n:'C',c:'gate_up     [T·k, 2I]  out'},{raw:'int E, int N, int K_gemm',c:'N = 2I, K_gemm = H'}]},
+  {id:10,ph:3,name:'silu_and_mul',tag:'SwiGLU',ins:['gate_up'],outs:['act'],
+    f:'act[r, c] = silu(gate_up[r, c]) ·\n  gate_up[r, I + c]',sh:'[T·k, 2I] → [T·k, I]',
+    par:'Elementwise: one thread per output element.',
+    args:[{t:'const bf16*',n:'gate_up',c:'[T·k, 2I]'},{t:'bf16*',n:'act',c:'[T·k, I]  out'},{raw:'int rows, int I',c:'rows = T·k'}]},
+  {id:11,ph:3,name:'grouped_gemm',tag:'down',ins:['act','W_down','expert_offsets'],outs:['Y_perm'],
+    f:'Y_perm[rows of e] =\n  act[rows of e] · W_down[e]',sh:'E GEMMs; expert e has\nM = tokens_per_expert[e], N = H, K = I',
+    par:'Same kernel as launch 9, with N = H and K = I.',
+    args:[{t:'const bf16*',n:'A',c:'act      [T·k, I]'},{t:'const bf16*',n:'B',c:'W_down   [E, I, H]'},{t:'const int*',n:'expert_offsets',c:'[E + 1]'},{t:'bf16*',n:'C',c:'Y_perm   [T·k, H]  out'},{raw:'int E, int N, int K_gemm',c:'N = H, K_gemm = I'}]},
+  {id:12,ph:4,name:'unpermute_combine',ins:['Y_perm','dst_row','topk_w'],outs:['Y'],inOpt:{topk_w:{norm:true}},
+    f:'Y[t, :] = Σj topk_w[t, j] ·\n  Y_perm[dst_row[t, j], :]',sh:'gather k rows per token, weight, add',
+    par:'One block per token. Gathering by token needs no atomics; scattering from the permuted rows would.',
+    args:[{t:'const bf16*',n:'Y_perm',c:'[T·k, H]'},{t:'const int*',n:'dst_row',c:'[T, k]'},{t:'const float*',n:'topk_w',c:'[T, k]'},{t:'bf16*',n:'Y',c:'[T, H]  out'},{raw:'int T, int k, int H'}]}
+];
+var NL=KERNELS.length;
+
+function lastWriterBefore(n,id){var w=null;KERNELS.forEach(function(k){if(k.id<id&&k.outs.indexOf(n)>=0)w=k.id;});return w;}
+function readersAfter(n,id){
+  var next=Infinity;
+  KERNELS.forEach(function(k){if(k.id>id&&k.outs.indexOf(n)>=0&&k.id<next)next=k.id;});
+  return KERNELS.filter(function(k){return k.id>id&&k.id<=next&&k.ins.indexOf(n)>=0;}).map(function(k){return k.id;});
+}
+function sigHTML(k){
+  var typed=k.args.filter(function(a){return a.t;});
+  var tw=Math.max.apply(null,typed.map(function(a){return a.t.length;}));
+  var nw=Math.max.apply(null,typed.map(function(a){return a.n.length+1;}));
+  var s='<span class="kw">__global__ void</span> '+esc(k.name)+'(\n';
+  k.args.forEach(function(a,i){
+    var sep=(i===k.args.length-1)?');':',';
+    if(a.raw)s+='    '+esc(a.raw+sep)+(a.c?'  <span class="cm">// '+esc(a.c)+'</span>':'')+'\n';
+    else s+='    '+esc(a.t+' '.repeat(tw-a.t.length))+' '+esc(a.n+sep+' '.repeat(nw+1-(a.n+sep).length))+(a.c?' <span class="cm">// '+esc(a.c)+'</span>':'')+'\n';
+  });
+  return s.replace(/\n$/,'');
+}
+function card(n,role,kid,opt){
+  var d=TENSORS[n],c=el('div','tc');
+  if(role==='out'&&d.output)c.classList.add('is-output');
+  var h=el('div','tch');
+  h.appendChild(el('code','tn',(opt&&opt.label)||n));
+  h.appendChild(el('span','dim',d.dims.length+'-D'));
+  c.appendChild(h);
+  c.appendChild(el('div','tm',d.sym+' = ['+d.dims.join(', ')+'] · '+d.dtype));
+  c.appendChild(d.draw(opt||{}));
+  var foot='';
+  if(role==='in'){
+    if(d.kind==='in')foot='layer input';
+    else if(d.kind==='param')foot='parameter, loaded with the model';
+    else foot='← written by launch '+lastWriterBefore(n,kid);
+  }else if(d.output){
+    foot='→ residual add, then the next layer';
+  }else{
+    var rs=readersAfter(n,kid);
+    if(rs.length)foot='→ read by launch'+(rs.length>1?'es ':' ')+rs.join(', ');
+  }
+  if(foot)c.appendChild(el('div','tf',foot));
+  return c;
+}
+function band(k){
+  var sec=el('div','kb');sec.id='launch-'+k.id;
+  var ln=el('div','launch'+(k.optional?' opt':''));
+  ln.appendChild(el('span','lp','launch '+k.id+' / '+NL));
+  ln.appendChild(el('code','ln',k.name));
+  if(k.tag)ln.appendChild(el('span','lt',k.tag));
+  if(k.optional)ln.appendChild(el('span','lt','optional'));
+  ln.appendChild(el('span','lr'));
+  sec.appendChild(ln);
+  var b=el('div','band');
+  var L=el('div','side in');L.appendChild(el('div','cap','reads'));
+  k.ins.forEach(function(n){L.appendChild(card(n,'in',k.id,(k.inOpt||{})[n]));});
+  var R=el('div','side out');R.appendChild(el('div','cap','writes'));
+  k.outs.forEach(function(n){R.appendChild(card(n,'out',k.id,(k.outOpt||{})[n]));});
+  var op=el('div','op'),oh=el('div');
+  oh.appendChild(el('code','on',k.name));
+  if(k.tag)oh.appendChild(el('span','tag',k.tag));
+  op.appendChild(oh);
+  op.appendChild(el('div','f',k.f));
+  op.appendChild(el('div','sh',k.sh));
+  op.appendChild(el('div','par',k.par));
+  b.appendChild(L);b.appendChild(el('div','arr'));b.appendChild(op);b.appendChild(el('div','arr'));b.appendChild(R);
+  sec.appendChild(b);
+  var pre=el('pre','sig');pre.innerHTML=sigHTML(k);sec.appendChild(pre);
+  return sec;
+}
+
+/* ---------- build the page ---------- */
+var tl=document.getElementById('tl'),flow=document.getElementById('flow');
+PHASES.forEach(function(ph){
+  var ks=KERNELS.filter(function(k){return k.ph===ph.n;});
+  var g=el('div','tlg');g.appendChild(el('div','tlh',ph.num+' '+ph.title));
+  var tr=el('div','tlr');
+  ks.forEach(function(k){
+    var a=el('a','tli'+(k.optional?' opt':''));a.href='#launch-'+k.id;
+    a.innerHTML='<b>'+k.id+'</b>'+esc(k.name)+(k.tag?' <i>'+esc(k.tag)+'</i>':'');
+    tr.appendChild(a);
+  });
+  g.appendChild(tr);tl.appendChild(g);
+  var s=el('section','phase');s.id='phase-'+ph.n;
+  var h=el('h2');h.innerHTML='<span>'+ph.num+' '+esc(ph.title)+'</span><span class="pr">'+esc(ph.range)+'</span>';
+  s.appendChild(h);s.appendChild(el('p',null,ph.desc));
+  ks.forEach(function(k){s.appendChild(band(k));});
+  flow.appendChild(s);
+});
+
+var KINDNAME={in:'input',param:'parameter',act:'data flow, float',meta:'data flow, int32'};
+var tbody=document.querySelector('#inv tbody');
+Object.keys(TENSORS).forEach(function(n){
+  var d=TENSORS[n],tr=el('tr');
+  var writers=KERNELS.filter(function(k){return k.outs.indexOf(n)>=0;}).map(function(k){return k.id;});
+  var readers=KERNELS.filter(function(k){return k.ins.indexOf(n)>=0;}).map(function(k){return k.id;});
+  var wtxt=d.kind==='in'?'previous layer':d.kind==='param'?'checkpoint':(n==='topk_w'?'3, then 4 in place':writers.join(', '));
+  var rtxt=readers.join(', ')+(d.output?'next layer':'');
+  var td1=el('td','mono');td1.textContent=n;tr.appendChild(td1);
+  var td2=el('td');var kd=el('span','k');kd.appendChild(el('span','sw '+d.kind));kd.appendChild(document.createTextNode(KINDNAME[d.kind]));td2.appendChild(kd);tr.appendChild(td2);
+  [d.sym,'['+d.dims.join(', ')+']',d.dtype].forEach(function(x){tr.appendChild(el('td','mono',x));});
+  tr.appendChild(el('td','mono',wtxt));tr.appendChild(el('td','mono',rtxt));tr.appendChild(el('td',null,d.holds));
+  tbody.appendChild(tr);
+});
+
+/* ---------- tracing ---------- */
+var chipsT=document.getElementById('chipsT'),chipsE=document.getElementById('chipsE'),CHIPS=[];
+function chip(parent,txt,k,id){var b=el('button','chip',txt);b.type='button';b._k=k;b._id=id;b.setAttribute('aria-pressed','false');parent.appendChild(b);CHIPS.push(b);}
+range(T).forEach(function(t){chip(chipsT,'t'+t,'t',t);});
+range(E).forEach(function(e){chip(chipsE,'E'+e,'e',e);});
+var statusEl=document.getElementById('status');
+var pinned=null,hover=null;
+function same(a,b){return (!a&&!b)||(!!a&&!!b&&a.k===b.k&&a.id===b.id);}
+function selOf(x){if(x._t!=null)return {k:'t',id:x._t};if(x._e!=null)return {k:'e',id:x._e};return null;}
+function match(c,s){
+  if(s.k==='t'){
+    if(c._t!=null)return c._t===s.id;
+    if(c._all)return true;
+    if(c._e!=null)return ROUTE[s.id].indexOf(c._e)>=0;
+    return false;
+  }
+  if(c._e!=null)return c._e===s.id;
+  if(c._t!=null)return ROUTE[c._t].indexOf(s.id)>=0;
+  return false;
+}
+function setStatus(s){
+  if(!s){statusEl.innerHTML='Hover any square to trace its token or expert through every launch. Click to pin; Esc clears.';return;}
+  var h;
+  if(s.k==='t'){
+    var t=s.id,a=ROUTE[t];
+    h='<b>Token t'+t+'</b> → experts <b>E'+a[0]+'</b> (weight '+f2(wNorm[t][0])+') and <b>E'+a[1]+'</b> ('+f2(wNorm[t][1])+') → permuted rows '+dst[t][0]+' and '+dst[t][1]+' → back into Y['+t+']';
+  }else{
+    var e=s.id,ts=tokensOf(e),m=counts[e];
+    h='<b>Expert E'+e+'</b> ← tokens '+(ts.length?ts.map(function(t){return 't'+t;}).join(', '):'none')+' → permuted rows '+(m?offsets[e]+'–'+(offsets[e+1]-1):'none')+' (M = '+m+') → weights W_gate_up['+e+'], W_down['+e+']';
+  }
+  if(pinned)h+='<span class="pin">pinned</span>';
+  statusEl.innerHTML=h;
+}
+function apply(s){
+  document.body.classList.toggle('tracing',!!s);
+  for(var i=0;i<CELLS.length;i++){CELLS[i].classList.toggle('hl',!!s&&match(CELLS[i],s));}
+  CHIPS.forEach(function(b){b.setAttribute('aria-pressed',String(!!pinned&&b._k===pinned.k&&b._id===pinned.id));});
+  setStatus(s);
+}
+document.addEventListener('mouseover',function(ev){
+  if(pinned)return;
+  var x=ev.target.closest('.cell,.lab'),s;
+  if(x)s=selOf(x);
+  else if(ev.target.closest('.tc,.bar'))return;
+  else s=null;
+  if(!same(s,hover)){hover=s;apply(s);}
+});
+document.documentElement.addEventListener('mouseleave',function(){if(!pinned&&hover){hover=null;apply(null);}});
+document.addEventListener('click',function(ev){
+  var b=ev.target.closest('.chip');
+  if(b){
+    if(b.id==='clear'){pinned=null;hover=null;apply(null);return;}
+    var cs={k:b._k,id:b._id};pinned=same(cs,pinned)?null:cs;hover=null;apply(pinned);return;
+  }
+  var x=ev.target.closest('.cell,.lab');if(!x)return;
+  var s=selOf(x);if(!s)return;
+  pinned=same(s,pinned)?null:s;hover=pinned?null:s;apply(pinned||s);
+});
+document.addEventListener('keydown',function(ev){if(ev.key==='Escape'){pinned=null;hover=null;apply(null);}});
+setStatus(null);
+})();
+</script>
+</body>
+</html>
